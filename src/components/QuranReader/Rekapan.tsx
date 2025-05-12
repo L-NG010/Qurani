@@ -11,7 +11,20 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { useEventListener } from "@vueuse/core";
 
-import { Chapters } from "@/types"; // Impor dari types/index.ts
+// Pindahkan Chapters ke file types/index.ts di masa depan
+export interface Chapters {
+  id: number;
+  bismillah_pre: boolean;
+  name_arabic: string;
+  name_complex: string;
+  name_simple: string;
+  pages: number[];
+  revelation_order: number;
+  revelation_place: string;
+  verses_count: number;
+  translated_name: { language_name: string; name: string };
+}
+
 import { useChapters } from "@/hooks/chapters";
 import { useJuzs, Juz } from "@/hooks/juzs";
 
@@ -295,8 +308,8 @@ export default defineComponent({
               data.words.map((text: string, index: number) => ({
                 salahKey: data.salahKey,
                 salah,
-                NamaSurat: recapData.surahDibaca || "",
-                Page: data.pages?.[index] || data.page || getVersePage(recapData.surahDibaca || "", 1) || parseInt(recapData.awalHalaman) || 1,
+                NamaSurat: recapData.surahDibaca || err.surah || "",
+                Page: data.pages?.[index] || data.page || getVersePage(recapData.surahDibaca || err.surah, 1) || parseInt(recapData.awalHalaman) || 1,
                 noAyat: 0,
                 kata: {
                   id: Date.now() + index,
@@ -639,11 +652,12 @@ export default defineComponent({
           localStorage.removeItem("kesalahan");
 
           setTimeout(() => {
-            if (window.top && window.top !== window) {
+            if (window.top) {
               window.top.location.href = `${apiUrl}/qurani`;
-            } else {
-              window.location.href = `${apiUrl}/qurani`;
             }
+            else {
+    window.location.href = `${apiUrl}/qurani`;
+  }
           }, 3000);
 
           setTimeout(() => {
@@ -669,11 +683,11 @@ export default defineComponent({
     }
 
     function goBack() {
-      if (window.top && window.top !== window) {
+      if (window.top) {
         window.top.location.href = `${apiUrl}/qurani`;
-      } else {
-        window.location.href = `${apiUrl}/qurani`;
-      }
+      }else {
+    window.location.href = `${apiUrl}/qurani`;
+  }
     }
 
     const surahOptions = computed(() => {
@@ -784,304 +798,308 @@ export default defineComponent({
 
     const savePageConclusions = () => {
       localStorage.setItem("pageConclusions", JSON.stringify(pageConclusions));
-           console.log("Debug: Saved page conclusions to localStorage:", pageConclusions);
+      console.log("Debug: Saved pageConclusions:", pageConclusions);
     };
 
     const loadPageConclusions = () => {
-      const saved = localStorage.getItem("pageConclusions");
-      if (saved) {
-        try {
-          Object.assign(pageConclusions, JSON.parse(saved));
-          console.log("Debug: Loaded page conclusions from localStorage:", pageConclusions);
-        } catch (error) {
-          console.error("Gagal memuat kesimpulan halaman dari localStorage:", error);
-          toast.error("Gagal memuat kesimpulan halaman: " + (error as Error).message);
-        }
+      const savedConclusions = localStorage.getItem("pageConclusions");
+      if (savedConclusions) {
+        Object.assign(pageConclusions, JSON.parse(savedConclusions));
+        console.log("Debug: Loaded pageConclusions:", pageConclusions);
       }
     };
 
+    watch(pageConclusions, savePageConclusions, { deep: true });
+
     return {
-      setoranData,
-      participantName,
-      penyimakName,
       recapData,
+      ayatSalah,
+      kataSalah,
+      submitRecap,
+      goBack,
+      getErrorColor,
+      submissionNotification,
       selectedStartSurah,
-      selectedEndSurah,
       selectedStartVerse,
+      totalStartVerses,
+      startVerseOptions,
+      selectedEndSurah,
       selectedEndVerse,
-      selectedJuz,
+      totalEndVerses,
+      endVerseOptions,
+      chapters,
       surahOptions,
       juzOptions,
-      startVerseOptions,
-      endVerseOptions,
+      selectedJuz,
+      markedErrors,
+      getVersePage,
+      errorsByPage,
       pageConclusions,
       pageNotes,
       panels,
-      errorsByPage,
-      markedErrors,
-      submissionNotification,
-      isSubmitting,
-      isFetching,
-      submitRecap,
-      goBack,
       togglePanel,
-      getErrorColor,
-      initializePageData,
+      setoranData,
+      participantName,
+      penyimakName,
+      isSubmitting,
       decodeUnicode,
-      saveToLocalStorage,
-      loadFromLocalStorage,
     };
   },
   render() {
-    const conclusions = ["Lancar", "Kurang Lancar", "Tidak Lancar"];
-    const startPage = parseInt(this.recapData.awalHalaman) || 1;
-    const endPage = parseInt(this.recapData.akhirHalaman) || startPage;
-    const pages = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
-
     return (
-      <div class="container mt-5">
-        <h1 class="mb-4">Rekapan Setoran</h1>
+      <div class="container my-4">
+        <button class="btn btn-link mb-3" style={{ textDecoration: "none" }} onClick={this.goBack}>
+          <img src="/assets/img/left-arrow.png" alt="Back" style={{ height: "24px" }} />
+        </button>
 
-        {this.isFetching ? (
-          <div class="text-center">
-            <div class="spinner-border" role="status">
-              <span class="visually-hidden">Memuat...</span>
-            </div>
+        <h2 class="mb-4 text-center">{this.$t("general.hasilrekap")}</h2>
+        {this.submissionNotification && (
+          <div class="alert alert-success" role="alert">
+            {this.submissionNotification}
           </div>
-        ) : (
-          <>
-            <div class="card mb-4">
-              <div class="card-header">Informasi Setoran</div>
-              <div class="card-body">
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Nama Peserta</label>
-                    <input
-                      type="text"
-                      class="form-control"
-                      vModel={this.recapData.namapeserta}
-                      disabled
-                    />
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Nama Penyimak</label>
-                    <input
-                      type="text"
-                      class="form-control"
-                      vModel={this.recapData.namaPenyimak}
-                      disabled
-                    />
-                  </div>
+        )}
+
+        <div class="card p-4 shadow-sm mb-4">
+          <div class="mb-3">
+            <label class="form-label">Peserta</label>
+            <input type="text" class="form-control" v-model={this.recapData.namapeserta} disabled />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Penerima</label>
+            <input type="text" class="form-control" v-model={this.recapData.namaPenyimak} disabled />
+          </div>
+          {this.setoranData?.tampilkan_type === "juz" ? (
+            <div class="mb-3">
+              <label class="form-label">Juz:</label>
+              <vSelect
+                v-model={this.selectedJuz}
+                options={this.juzOptions}
+                reduce={(option: { value: string }) => option.value}
+                placeholder="Cari juz..."
+                clearable={false}
+                onInput={(val: string) => console.log("Debug: Juz selected:", val)}
+              />
+            </div>
+          ) : (
+            <>
+              <div class="d-flex gap-3 mb-3">
+                <div class="flex-grow-1">
+                  <label class="form-label">Awal Surat:</label>
+                  <vSelect
+                    v-model={this.selectedStartSurah}
+                    options={this.surahOptions}
+                    placeholder="Cari surah..."
+                    clearable={false}
+                  />
                 </div>
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Surah Awal</label>
-                    <vSelect
-                      vModel={this.selectedStartSurah}
-                      options={this.surahOptions}
-                      placeholder="Pilih Surah Awal"
-                    />
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Ayat Awal</label>
-                    <select
-                      class="form-select"
-                      vModel={this.selectedStartVerse}
-                    >
-                      {this.startVerseOptions.map((verse) => (
-                        <option key={verse} value={verse}>
-                          {verse}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div class="flex-grow-1">
+                  <label class="form-label">Awal Ayat:</label>
+                  <vSelect
+                    v-model={this.selectedStartVerse}
+                    options={this.startVerseOptions}
+                    placeholder="Cari ayat..."
+                    clearable={false}
+                  />
                 </div>
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Surah Akhir</label>
-                    <vSelect
-                      vModel={this.selectedEndSurah}
-                      options={this.surahOptions}
-                      placeholder="Pilih Surah Akhir"
-                    />
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Ayat Akhir</label>
-                    <select
-                      class="form-select"
-                      vModel={this.selectedEndVerse}
-                    >
-                      {this.endVerseOptions.map((verse) => (
-                        <option key={verse} value={verse}>
-                          {verse}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              </div>
+              <div class="d-flex gap-3 mb-3">
+                <div class="flex-grow-1">
+                  <label class="form-label">Akhir Surat:</label>
+                  <vSelect
+                    v-model={this.selectedEndSurah}
+                    options={this.surahOptions}
+                    placeholder="Cari surah..."
+                    clearable={false}
+                  />
                 </div>
-                {this.setoranData?.tampilkan_type === "juz" && (
-                  <div class="row">
-                    <div class="col-md-12 mb-3">
-                      <label class="form-label">Juz</label>
-                      <vSelect
-                        vModel={this.selectedJuz}
-                        options={this.juzOptions}
-                        label="label"
-                        value="value"
-                        placeholder="Pilih Juz"
+                <div class="flex-grow-1">
+                  <label class="form-label">Akhir Ayat:</label>
+                  <vSelect
+                    v-model={this.selectedEndVerse}
+                    options={this.endVerseOptions}
+                    placeholder="Cari ayat..."
+                    clearable={false}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+          <div class="mb-3">
+            <label class="form-label">Kesimpulan</label>
+            <select class="form-select" style={{ maxWidth: "200px" }} v-model={this.recapData.kesimpulan}>
+              <option value="" style={{ color: "grey" }}>
+                Pilih Kesimpulan
+              </option>
+              <option value="Lancar">Lancar</option>
+              <option value="Tidak Lancar">Tidak Lancar</option>
+              <option value="Lulus">Lulus</option>
+              <option value="Tidak Lulus">Tidak Lulus</option>
+              <option value="Mumtaz">Mumtaz</option>
+              <option value="Dhoif">Dhoif</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Catatan</label>
+            <textarea
+              class="form-control"
+              v-model={this.recapData.catatan}
+              placeholder="Catatan"
+            ></textarea>
+          </div>
+          <div class="d-flex justify-content-end">
+            <button
+              class="btn btn-primary"
+              onClick={this.submitRecap}
+              disabled={this.isSubmitting}
+            >
+              {this.isSubmitting ? "Mengirim..." : "Kirim"}
+            </button>
+          </div>
+        </div>
+        {Object.entries(this.errorsByPage)
+          .sort(([pageA], [pageB]) => parseInt(pageA) - parseInt(pageB))
+          .map(([page, errors]: [string, { ayatSalah: MarkedError[]; kataSalah: MarkedError[] }]) => (
+            <div key={page} class="card mb-3 shadow-sm">
+              <div
+                class="card-header d-flex align-items-center justify-content-between"
+                style={{
+                  background: "#d9edf7",
+                  border: "none",
+                  color: "#2C3E50",
+                  cursor: "pointer",
+                }}
+                onClick={() => this.togglePanel(page)}
+              >
+                <h5
+                  class="m-0"
+                  style={{
+                    color: "#31708f",
+                  }}
+                >
+                  Halaman {page}
+                </h5>
+                <span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="34px"
+                    height="34px"
+                    viewBox="0 0 24 24"
+                    style={{
+                      transform: this.panels[page] ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.3s",
+                      marginTop: "20px",
+                      color: "#31708f",
+                    }}
+                  >
+                    <g>
+                      <path fill="none" d="M0 0h24v24H0z" />
+                      <path
+                        fill="currentColor"
+                        d="M12 15l-4.243-4.243 1.415-1.414L12 12.172l2.828-2.829 1.415 1.414z"
                       />
-                    </div>
-                  </div>
-                )}
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Halaman Awal</label>
-                    <input
-                      type="number"
-                      class="form-control"
-                      vModel={this.recapData.awalHalaman}
-                    />
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Halaman Akhir</label>
-                    <input
-                      type="number"
-                      class="form-control"
-                      vModel={this.recapData.akhirHalaman}
-                    />
-                  </div>
+                    </g>
+                  </svg>
+                </span>
+              </div>
+              <div class="card-body" v-show={this.panels[page]}>
+                <div class="mb-3">
+                  <h6>Kesalahan Ayat:</h6>
+                  {errors.ayatSalah.length === 0 ? (
+                    <p class="text-muted">Tidak ada kesalahan ayat.</p>
+                  ) : (
+                    <ul style={{ textAlign: "left", listStyleType: "none", padding: 0 }}>
+                      {errors.ayatSalah.map((err, idx) => (
+                        <li
+                          key={`verse-${idx}`}
+                          class="list-group-item"
+                          style={{ borderBottom: "1px solid #ddd", padding: "7px 0" }}
+                        >
+                          <span style={{ fontWeight: "500", fontSize: "15px", marginRight: "5px" }}>
+                            {idx + 1}.
+                          </span>
+                          <span
+                            class="badge ms-2 me-1"
+                            style={{
+                              backgroundColor: this.getErrorColor(err.salahKey),
+                              color: "#000",
+                              borderWidth: "2px",
+                              fontWeight: "500",
+                              textAlign: "left",
+                              fontSize: "15px",
+                            }}
+                          >
+                            {err.NamaSurat} : {err.noAyat}
+                          </span>
+                          <span>{err.salah}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div class="mb-3">
-                  <label class="form-label">Kesimpulan</label>
+                  <h6>Kesalahan Kata:</h6>
+                  {errors.kataSalah.length === 0 ? (
+                    <p class="text-muted">Tidak ada kesalahan kata.</p>
+                  ) : (
+                    <ul style={{ textAlign: "left", listStyleType: "none", padding: 0 }}>
+                      {errors.kataSalah.map((err, idx) => (
+                        <li
+                          key={`word-${idx}`}
+                          class="list-group-item"
+                          style={{
+                            borderBottom: "1px solid #ddd",
+                            padding: "5px 0",
+                          }}
+                        >
+                          <span style={{ fontWeight: "500", fontSize: "15px", marginRight: "5px" }}>
+                            {idx + 1}.
+                          </span>
+                          <span
+                            class="badge me-2"
+                            style={{
+                              backgroundColor: this.getErrorColor(err.salahKey),
+                              color: "#000",
+                              fontSize: "20px",
+                              fontFamily: "'Scheherazade New', 'Amiri', serif",
+                            }}
+                          >
+                            {this.decodeUnicode(err.kata?.text || "")}
+                          </span>
+                          <span>{err.salah}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div class="mb-3">
+                  <h6>Kesimpulan</h6>
                   <select
                     class="form-select"
-                    vModel={this.recapData.kesimpulan}
+                    style={{ maxWidth: "200px" }}
+                    v-model={this.pageConclusions[page]}
                   >
-                    <option value="">Pilih Kesimpulan</option>
-                    {conclusions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
+                    <option value="" style={{ color: "grey" }}>
+                      Pilih Kesimpulan
+                    </option>
+                    <option value="Lancar">Lancar</option>
+                    <option value="Tidak Lancar">Tidak Lancar</option>
+                    <option value="Lulus">Lulus</option>
+                    <option value="Tidak Lulus">Tidak Lulus</option>
+                    <option value="Mumtaz">Mumtaz</option>
+                    <option value="Dhoif">Dhoif</option>
                   </select>
                 </div>
                 <div class="mb-3">
-                  <label class="form-label">Catatan</label>
+                  <h6>Catatan</h6>
                   <textarea
                     class="form-control"
-                    vModel={this.recapData.catatan}
-                    rows={4}
+                    v-model={this.pageNotes[page]}
+                    placeholder="Catatan khusus halaman ini"
                   ></textarea>
                 </div>
               </div>
             </div>
-
-            {pages.map((page) => (
-              <div key={page} class="card mb-3">
-                <div
-                  class="card-header d-flex justify-content-between align-items-center"
-                  onClick={() => this.togglePanel(page.toString())}
-                  style={{ cursor: "pointer" }}
-                >
-                  <h5 class="mb-0">Halaman {page}</h5>
-                  <i
-                    class={this.panels[page.toString()] ? "bi bi-chevron-up" : "bi bi-chevron-down"}
-                  ></i>
-                </div>
-                {this.panels[page.toString()] && (
-                  <div class="card-body">
-                    <div class="mb-3">
-                      <label class="form-label">Kesimpulan Halaman</label>
-                      <select
-                        class="form-select"
-                        vModel={this.pageConclusions[page.toString()]}
-                      >
-                        {conclusions.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div class="mb-3">
-                      <label class="form-label">Catatan Halaman</label>
-                      <textarea
-                        class="form-control"
-                        vModel={this.pageNotes[page.toString()]}
-                        rows={3}
-                      ></textarea>
-                    </div>
-                    {this.errorsByPage[page]?.ayatSalah?.length > 0 && (
-                      <div class="mb-3">
-                        <h6>Kesalahan Ayat</h6>
-                        <ul class="list-group">
-                          {this.errorsByPage[page].ayatSalah.map((err, index) => (
-                            <li
-                              key={`ayat-${page}-${index}`}
-                              class="list-group-item"
-                              style={{
-                                backgroundColor: this.getErrorColor(err.salahKey),
-                              }}
-                            >
-                              Ayat {err.noAyat}: {err.salah}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {this.errorsByPage[page]?.kataSalah?.length > 0 && (
-                      <div class="mb-3">
-                        <h6>Kesalahan Kata</h6>
-                        <ul class="list-group">
-                          {this.errorsByPage[page].kataSalah.map((err, index) => (
-                            <li
-                              key={`kata-${page}-${index}`}
-                              class="list-group-item"
-                              style={{
-                                backgroundColor: this.getErrorColor(err.salahKey),
-                              }}
-                            >
-                              Kata "{this.decodeUnicode(err.kata?.text_uthmani)}": {err.salah}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            <div class="d-flex justify-content-between mt-4">
-              <button
-                class="btn btn-secondary"
-                onClick={this.goBack}
-                disabled={this.isSubmitting}
-              >
-                Kembali
-              </button>
-              <button
-                class="btn btn-primary"
-                onClick={this.submitRecap}
-                disabled={this.isSubmitting}
-              >
-                {this.isSubmitting ? (
-                  <span
-                    class="spinner-border spinner-border-sm"
-                    role="status"
-                    aria-hidden="true"
-                  ></span>
-                ) : (
-                  "Kirim Rekapan"
-                )}
-              </button>
-            </div>
-
-            {this.submissionNotification && (
-              <div class="alert alert-info mt-3">{this.submissionNotification}</div>
-            )}
-          </>
-        )}
+          ))}
       </div>
     );
   },
