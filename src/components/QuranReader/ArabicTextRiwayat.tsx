@@ -22,7 +22,9 @@ import styles from "./ArabicText.module.scss";
 import AlertDialog from "../AlertDialog/AlertDialog";
 import { useSettings } from "@/hooks/settings";
 
-interface TooltipOptions extends Partial<BSTooltip.Options> {}
+interface TooltipOptions extends Partial<BSTooltip.Options> {
+  title?: string; // Ganti 'content' dengan 'title' untuk kompatibilitas
+}
 
 interface Kesalahan {
   salahKey: string;
@@ -101,7 +103,7 @@ export default defineComponent({
     );
     const saveKesalahan = inject<() => void>("saveKesalahan", () => {
       console.warn(
-        "ArabicText.tsx: saveKesalahan not provided, using fallback."
+        "ArabicTextRiwayat.tsx: saveKesalahan not provided, using fallback."
       );
       try {
         const groupedData = {
@@ -137,12 +139,12 @@ export default defineComponent({
         };
         localStorage.setItem("kesalahan", JSON.stringify(groupedData));
         console.log(
-          "ArabicText.tsx: Saved grouped kesalahan to localStorage:",
+          "ArabicTextRiwayat.tsx: Saved grouped kesalahan to localStorage:",
           groupedData
         );
       } catch (error) {
         console.error(
-          "ArabicText.tsx: Failed to save kesalahan (fallback):",
+          "ArabicTextRiwayat.tsx: Failed to save kesalahan (fallback):",
           error
         );
       }
@@ -299,14 +301,15 @@ export default defineComponent({
               ...filteredKataKesalahan,
             ];
             console.log(
-              "ArabicText.tsx: Loaded and filtered kesalahan from setoranData:",
+              "ArabicTextRiwayat.tsx: Loaded and filtered kesalahan from setoranData:",
               kesalahan.value
             );
           }
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           console.error(
             "ArabicTextRiwayat.tsx: Failed to parse setoranData:",
-            error instanceof Error ? error.message : String(error)
+            errorMessage
           );
         }
       }
@@ -319,11 +322,12 @@ export default defineComponent({
           const parsed = JSON.parse(settings);
           errorColors.value = parsed.errorColors || {};
           customLabels.value = parsed.customLabels || {};
-          console.log("ArabicText.tsx: Loaded error settings:", parsed);
+          console.log("ArabicTextRiwayat.tsx: Loaded error settings:", parsed);
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           console.error(
-            "ArabicText.tsx: Failed to parse qurani_setting_global:",
-            error instanceof Error ? error.message : String(error)
+            "ArabicTextRiwayat.tsx: Failed to parse qurani_setting_global:",
+            errorMessage
           );
         }
       }
@@ -332,7 +336,7 @@ export default defineComponent({
     onMounted(() => {
       renderCount.value++;
       console.log(
-        `ArabicText.tsx: Component rendered ${renderCount.value} times for verseKey: ${verseKey.value}`
+        `ArabicTextRiwayat.tsx: Component rendered ${renderCount.value} times for verseKey: ${verseKey.value}`
       );
 
       loadSetoranData();
@@ -383,12 +387,13 @@ export default defineComponent({
       try {
         localStorage.setItem(settingsKey, JSON.stringify(data));
         console.log(
-          `ArabicText.tsx: Settings saved to localStorage with key ${settingsKey}`
+          `ArabicTextRiwayat.tsx: Settings saved to localStorage with key ${settingsKey}`
         );
       } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(
-          `ArabicText.tsx: Failed to save to localStorage with key ${settingsKey}:`,
-          error instanceof Error ? error.message : String(error)
+          `ArabicTextRiwayat.tsx: Failed to save to localStorage with key ${settingsKey}:`,
+          errorMessage
         );
       }
     };
@@ -404,7 +409,7 @@ export default defineComponent({
             !parsed.errorTypes
           ) {
             console.warn(
-              `ArabicText.tsx: Incomplete localStorage data for ${settingsKey}, removing data`
+              `ArabicTextRiwayat.tsx: Incomplete localStorage data for ${settingsKey}, removing data`
             );
             localStorage.removeItem(settingsKey);
             return false;
@@ -415,13 +420,14 @@ export default defineComponent({
           errorKeysOrder.value = parsed.errorKeysOrder || [];
           errorTypes.value = parsed.errorTypes || {};
           console.log(
-            `ArabicText.tsx: Settings loaded from localStorage with key ${settingsKey}`
+            `ArabicTextRiwayat.tsx: Settings loaded from localStorage with key ${settingsKey}`
           );
           return true;
         } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           console.error(
-            "ArabicText.tsx: Failed to parse settings from localStorage:",
-            error instanceof Error ? error.message : String(error)
+            "ArabicTextRiwayat.tsx: Failed to parse settings from localStorage:",
+            errorMessage
           );
           localStorage.removeItem(settingsKey);
           return false;
@@ -431,7 +437,7 @@ export default defineComponent({
     };
 
     const processApiData = (apiData: any[], settingsKey: string) => {
-      console.log("ArabicText.tsx: Processing API data:", apiData);
+      console.log("ArabicTextRiwayat.tsx: Processing API data:", apiData);
       const newCheckedErrors: Record<string, boolean> = {};
       const newCustomLabels: Record<string, string> = {};
       const newErrorColors: Record<string, string> = {};
@@ -462,7 +468,7 @@ export default defineComponent({
             kataLabels.push({ label, key });
           }
         } else {
-          console.warn(`ArabicText.tsx: Invalid item ignored:`, item);
+          console.warn(`ArabicTextRiwayat.tsx: Invalid item ignored:`, item);
         }
       });
 
@@ -505,7 +511,7 @@ export default defineComponent({
 
       if (loadErrorSettingsFull(settingsKey)) {
         console.log(
-          `ArabicText.tsx: Using data from localStorage for ${settingsKey}`
+          `ArabicTextRiwayat.tsx: Using data from localStorage for ${settingsKey}`
         );
         apiErrorMessage.value = null;
         isLoadingSettings.value = false;
@@ -527,13 +533,13 @@ export default defineComponent({
         localStorage.setItem("selectedUser", JSON.stringify({ id: userId }));
         localStorage.removeItem("selectedGroup");
       } else {
-        console.warn("ArabicText.tsx: No valid groupId or userId.");
+        console.warn("ArabicTextRiwayat.tsx: No valid groupId or userId.");
         apiErrorMessage.value = "Tidak ada grup atau pengguna yang dipilih.";
         isLoadingSettings.value = false;
         return;
       }
 
-      console.log(`ArabicText.tsx: Fetching settings from ${apiUrl}`);
+      console.log(`ArabicTextRiwayat.tsx: Fetching settings from ${apiUrl}`);
       try {
         const response = await fetch(apiUrl);
         if (!response.ok) {
@@ -543,12 +549,12 @@ export default defineComponent({
         processApiData(apiData, settingsKey);
         apiErrorMessage.value = null;
       } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(
-          "Error:",
-          error instanceof Error ? error.message : String(error)
+          "ArabicTextRiwayat.tsx: Error in fetchSettings:",
+          errorMessage
         );
-        apiErrorMessage.value =
-          error instanceof Error ? error.message : String(error);
+        apiErrorMessage.value = errorMessage;
       } finally {
         isLoadingSettings.value = false;
       }
@@ -739,7 +745,7 @@ export default defineComponent({
 
       if (isDuplicate) {
         console.log(
-          "ArabicText.tsx: Duplicate kesalahan detected, skipping addition."
+          "ArabicTextRiwayat.tsx: Duplicate kesalahan detected, skipping addition."
         );
         closeModal();
         return;
@@ -755,7 +761,7 @@ export default defineComponent({
       };
 
       kesalahan.value = [...kesalahan.value, newKesalahan];
-      console.log("ArabicText.tsx: Updated kesalahan:", kesalahan.value);
+      console.log("ArabicTextRiwayat.tsx: Updated kesalahan:", kesalahan.value);
       saveKesalahan();
       closeModal();
     }
@@ -887,7 +893,7 @@ export default defineComponent({
       isLoadingSettings,
       shouldDisplayErrors,
       decodeUnicode,
-      defaultColorMap,
+      defaultColorMap, // Kembalikan defaultColorMap agar dapat diakses di render
     };
   },
   render() {
@@ -1015,9 +1021,9 @@ export default defineComponent({
             html: true,
             placement: "top",
             delay: { show: 200, hide: 200 },
-            title: this.getVerseErrorTooltip(),
+            title: this.getVerseErrorTooltip(), // Ganti 'content' dengan 'title'
             container: "body",
-            trigger: "click", // Changed to click to avoid hover
+            trigger: "click", // Menggunakan click, bukan hover
           } as TooltipOptions}
           onInit={this.onInitErrorTooltip(`verse-${this.verseKey}`)}
           dir="rtl"
@@ -1048,9 +1054,9 @@ export default defineComponent({
                   html: true,
                   delay: { show: 200, hide: 200 },
                   placement: "top",
-                  title: this.getWordErrorTooltip(word),
+                  title: this.getWordErrorTooltip(word), // Ganti 'content' dengan 'title'
                   container: "body",
-                  trigger: "click", // Changed to click to avoid hover
+                  trigger: "click", // Menggunakan click, bukan hover
                 } as TooltipOptions}
                 onInit={this.onInitErrorTooltip(`word-${word.id}`)}
                 class={[
