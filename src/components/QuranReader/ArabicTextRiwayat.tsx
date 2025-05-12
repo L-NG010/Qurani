@@ -1,5 +1,15 @@
 import { Chapters, QuranReader, Words } from "@/types";
-import { defineComponent, PropType, ref, computed, Teleport, onMounted, onBeforeUnmount, inject,Ref } from "vue";
+import {
+  defineComponent,
+  PropType,
+  ref,
+  computed,
+  Teleport,
+  onMounted,
+  onBeforeUnmount,
+  inject,
+  Ref,
+} from "vue";
 import { Tooltip as BSTooltip, Popover as BSPopover } from "bootstrap";
 import { useI18n } from "vue-i18n";
 import { useChapters } from "@/hooks/chapters";
@@ -13,8 +23,9 @@ import AlertDialog from "../AlertDialog/AlertDialog";
 import { useSettings } from "@/hooks/settings";
 
 interface TooltipOptions extends Partial<BSTooltip.Options> {
-  content?: string | (() => string);
+  // Removed content; using title from BSTooltip.Options
 }
+
 interface Kesalahan {
   salahKey: string;
   salah: string;
@@ -22,7 +33,7 @@ interface Kesalahan {
   Page: number;
   noAyat: number;
   kata: {
-    char_type: string;
+    char_type_name: string; // Fixed to match Words
     id: number;
     text: string;
   } | null;
@@ -85,11 +96,15 @@ export default defineComponent({
     const chapters = useChapters();
     const settings = useSettings();
     const { fontType } = settings;
-    
 
-    const kesalahan = inject<Ref<Kesalahan[]>>("kesalahan", ref<Kesalahan[]>([]));
+    const kesalahan = inject<Ref<Kesalahan[]>>(
+      "kesalahan",
+      ref<Kesalahan[]>([])
+    );
     const saveKesalahan = inject<() => void>("saveKesalahan", () => {
-      console.warn("ArabicText.tsx: saveKesalahan not provided, using fallback.");
+      console.warn(
+        "ArabicText.tsx: saveKesalahan not provided, using fallback."
+      );
       try {
         const groupedData = {
           ayatSalah: kesalahan.value
@@ -99,14 +114,23 @@ export default defineComponent({
               ayat: err.noAyat,
               jenisKesalahan: err.salah,
               salahKey: err.salahKey,
-              page: err.Page || (props.words.length > 0 ? props.words[0].page_number : 1),
+              page:
+                err.Page ||
+                (props.words.length > 0 ? props.words[0].page_number : 1),
             })),
           kataSalah: kesalahan.value
             .filter((err) => err.kata !== null)
             .reduce((acc, err) => {
               const key = err.salah;
               if (!acc[key]) {
-                acc[key] = { count: 0, words: [], salahKey: err.salahKey, page: err.Page || (props.words.length > 0 ? props.words[0].page_number : 1) };
+                acc[key] = {
+                  count: 0,
+                  words: [],
+                  salahKey: err.salahKey,
+                  page:
+                    err.Page ||
+                    (props.words.length > 0 ? props.words[0].page_number : 1),
+                };
               }
               acc[key].count += 1;
               acc[key].words.push(err.kata!.text);
@@ -114,23 +138,32 @@ export default defineComponent({
             }, {} as Record<string, { count: number; words: string[]; salahKey: string; page: number }>),
         };
         localStorage.setItem("kesalahan", JSON.stringify(groupedData));
-        console.log("ArabicText.tsx: Saved grouped kesalahan to localStorage:", groupedData);
+        console.log(
+          "ArabicText.tsx: Saved grouped kesalahan to localStorage:",
+          groupedData
+        );
       } catch (error) {
-        console.error("ArabicText.tsx: Failed to save kesalahan (fallback):", error);
+        console.error(
+          "ArabicText.tsx: Failed to save kesalahan (fallback):",
+          error
+        );
       }
     });
 
     const tooltipInstance = ref<Record<number, BSTooltip>>({});
     const popoverInstance = ref<Record<number, BSPopover>>({});
-    const errorTooltipInstance = ref<Record<string, BSTooltip>>({}); // Untuk tooltip kesalahan
+    const errorTooltipInstance = ref<Record<string, BSTooltip>>({});
     const popover = ref<BSPopover | null>(null);
-    const isHover = ref<boolean>(false);
     const isModalVisible = ref<boolean>(false);
     const modalContent = ref<string>("");
     const isLoadingSettings = ref<boolean>(false);
-    const refs = ref<{ popoverContent: HTMLElement | null }>({ popoverContent: null });
+    const refs = ref<{ popoverContent: HTMLElement | null }>({
+      popoverContent: null,
+    });
     const verseKey = computed<string>(() => {
-      return [props.chapterId, props.verseNumber].filter((v) => v !== undefined).join(":");
+      return [props.chapterId, props.verseNumber]
+        .filter((v) => v !== undefined)
+        .join(":");
     });
     const chapter = computed<Chapters | null>(() => {
       return props.chapterId ? chapters.find(props.chapterId) : null;
@@ -139,7 +172,11 @@ export default defineComponent({
       return props.words.map((word) => word.text_uthmani).join(" ");
     });
     const shouldUseButton = computed<boolean>(() => {
-      return props.buttons.length > 0 && props.chapterId !== undefined && props.verseNumber !== undefined;
+      return (
+        props.buttons.length > 0 &&
+        props.chapterId !== undefined &&
+        props.verseNumber !== undefined
+      );
     });
     const correctionTarget = ref<"ayat" | "kata">("kata");
     const selectedWord = ref<Words | null>(null);
@@ -179,62 +216,103 @@ export default defineComponent({
 
     function decodeUnicode(str: string | undefined | null): string {
       if (typeof str !== "string") return "";
-      return str.replace(/\\u([\dA-Fa-f]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      return str.replace(/\\u([\dA-Fa-f]{4})/g, (_, hex) =>
+        String.fromCharCode(parseInt(hex, 16))
+      );
     }
 
     function loadSetoranData() {
-  const data = localStorage.getItem("setoranData");
-  if (data) {
-    try {
-      setoranData.value = JSON.parse(data);
-      hasHasil.value = setoranData.value !== null && "hasil" in setoranData.value;
-      if (hasHasil.value && setoranData.value!.kesalahan) {
-        const parsedKesalahan = JSON.parse(setoranData.value!.kesalahan);
-        const ayatKesalahan = parsedKesalahan.ayatSalah.map((err: { salahKey: string; jenisKesalahan: string; surah: string; page: number; ayat: number }) => ({
-  salahKey: err.salahKey,
-  salah: err.jenisKesalahan,
-  NamaSurat: err.surah,
-  Page: err.page || (props.words.length > 0 ? props.words[0].page_number : 1),
-  noAyat: err.ayat,
-  kata: null,
-}));
-        const kataKesalahan: Kesalahan[] = [];
-            Object.entries(parsedKesalahan.kataSalah).forEach(([salah, data]: [string, any]) => {
-              const words = data.words;
-              let wordIndex = 0;
-              props.words.forEach((word) => {
-                if (wordIndex < words.length && decodeUnicode(word.text_uthmani) === decodeUnicode(words[wordIndex])) {
-                  kataKesalahan.push({
-                    salahKey: data.salahKey,
-                    salah,
-                    NamaSurat: setoranData.value?.info || chapter.value?.name_simple || "",
-                    Page: data.page || word.page_number || (props.words.length > 0 ? props.words[0].page_number : 1),
-                    noAyat: props.verseNumber || 0,
-                    kata: {
-                      char_type: word.char_type_name,
-                      id: word.id,
-                      text: decodeUnicode(word.text_uthmani),
-                    },
-                  });
-                  wordIndex++;
-                }
-              });
-            });
+      const data = localStorage.getItem("setoranData");
+      if (data) {
+        try {
+          setoranData.value = JSON.parse(data);
+          hasHasil.value =
+            setoranData.value !== null && "hasil" in setoranData.value;
+          if (hasHasil.value && setoranData.value!.kesalahan) {
+            const parsedKesalahan = JSON.parse(setoranData.value!.kesalahan);
+            const ayatKesalahan = parsedKesalahan.ayatSalah.map(
+              (err: {
+                salahKey: string;
+                jenisKesalahan: string;
+                surah: string;
+                page: number;
+                ayat: number;
+              }) => ({
+                salahKey: err.salahKey,
+                salah: err.jenisKesalahan,
+                NamaSurat: err.surah,
+                Page:
+                  err.page ||
+                  (props.words.length > 0 ? props.words[0].page_number : 1),
+                noAyat: err.ayat,
+                kata: null,
+              })
+            );
+            const kataKesalahan: Kesalahan[] = [];
+            Object.entries(parsedKesalahan.kataSalah).forEach(
+              ([salah, data]: [string, any]) => {
+                const words = data.words;
+                let wordIndex = 0;
+                props.words.forEach((word) => {
+                  if (
+                    wordIndex < words.length &&
+                    decodeUnicode(word.text_uthmani) ===
+                      decodeUnicode(words[wordIndex])
+                  ) {
+                    kataKesalahan.push({
+                      salahKey: data.salahKey,
+                      salah,
+                      NamaSurat:
+                        setoranData.value?.info ||
+                        chapter.value?.name_simple ||
+                        "",
+                      Page:
+                        data.page ||
+                        word.page_number ||
+                        (props.words.length > 0
+                          ? props.words[0].page_number
+                          : 1),
+                      noAyat: props.verseNumber || 0,
+                      kata: {
+                        char_type_name: word.char_type_name,
+                        id: word.id,
+                        text: decodeUnicode(word.text_uthmani),
+                      },
+                    });
+                    wordIndex++;
+                  }
+                });
+              }
+            );
             const filteredAyatKesalahan = ayatKesalahan.filter(
-              (err) => err.NamaSurat === chapter.value?.name_simple && err.noAyat === props.verseNumber
+              (err) =>
+                err.NamaSurat === chapter.value?.name_simple &&
+                err.noAyat === props.verseNumber
             );
             const wordIds = new Set(props.words.map((w) => w.id));
             const filteredKataKesalahan = kataKesalahan.filter(
-              (err) => err.NamaSurat === chapter.value?.name_simple && err.kata && wordIds.has(err.kata.id)
+              (err) =>
+                err.NamaSurat === chapter.value?.name_simple &&
+                err.kata &&
+                wordIds.has(err.kata.id)
             );
-            kesalahan.value = [...filteredAyatKesalahan, ...filteredKataKesalahan];
-            console.log("ArabicText.tsx: Loaded and filtered kesalahan from setoranData:", kesalahan.value);
+            kesalahan.value = [
+              ...filteredAyatKesalahan,
+              ...filteredKataKesalahan,
+            ];
+            console.log(
+              "ArabicText.tsx: Loaded and filtered kesalahan from setoranData:",
+              kesalahan.value
+            );
           }
-    } catch (error) {
-      console.error("ArabicTextRiwayat.tsx: Failed to parse setoranData:", error);
+        } catch (error) {
+          console.error(
+            "ArabicTextRiwayat.tsx: Failed to parse setoranData:",
+            error
+          );
+        }
+      }
     }
-  }
-}
 
     function loadErrorSettings() {
       const settings = localStorage.getItem("qurani_setting_global");
@@ -245,15 +323,20 @@ export default defineComponent({
           customLabels.value = parsed.customLabels || {};
           console.log("ArabicText.tsx: Loaded error settings:", parsed);
         } catch (error) {
-          console.error("ArabicText.tsx: Failed to parse qurani_setting_global:", error);
+          console.error(
+            "ArabicText.tsx: Failed to parse qurani_setting_global:",
+            error
+          );
         }
       }
     }
 
     onMounted(() => {
       renderCount.value++;
-      console.log(`ArabicText.tsx: Component rendered ${renderCount.value} times for verseKey: ${verseKey.value}`);
-      
+      console.log(
+        `ArabicText.tsx: Component rendered ${renderCount.value} times for verseKey: ${verseKey.value}`
+      );
+
       loadSetoranData();
       loadErrorSettings();
 
@@ -275,12 +358,20 @@ export default defineComponent({
     });
 
     onBeforeUnmount(() => {
-      window.removeEventListener("setoranDataReceived", handleSetoranDataReceived);
+      window.removeEventListener(
+        "setoranDataReceived",
+        handleSetoranDataReceived
+      );
       window.removeEventListener("keydown", handleKeydown);
-      isHover.value = false;
-      Object.keys(tooltipInstance.value).forEach((key) => tooltipInstance.value[Number(key)]?.hide());
-      Object.keys(popoverInstance.value).forEach((key) => popoverInstance.value[Number(key)]?.hide());
-      Object.keys(errorTooltipInstance.value).forEach((key) => errorTooltipInstance.value[key]?.hide());
+      Object.keys(tooltipInstance.value).forEach((key) =>
+        tooltipInstance.value[Number(key)]?.hide()
+      );
+      Object.keys(popoverInstance.value).forEach((key) =>
+        popoverInstance.value[Number(key)]?.hide()
+      );
+      Object.keys(errorTooltipInstance.value).forEach((key) =>
+        errorTooltipInstance.value[key]?.hide()
+      );
     });
 
     const saveErrorSettings = (settingsKey: string) => {
@@ -293,9 +384,14 @@ export default defineComponent({
       };
       try {
         localStorage.setItem(settingsKey, JSON.stringify(data));
-        console.log(`ArabicText.tsx: Settings saved to localStorage with key ${settingsKey}`);
+        console.log(
+          `ArabicText.tsx: Settings saved to localStorage with key ${settingsKey}`
+        );
       } catch (e) {
-        console.error(`ArabicText.tsx: Failed to save to localStorage with key ${settingsKey}:`, e);
+        console.error(
+          `ArabicText.tsx: Failed to save to localStorage with key ${settingsKey}:`,
+          e
+        );
       }
     };
 
@@ -304,8 +400,14 @@ export default defineComponent({
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          if (!parsed.errorKeysOrder || !parsed.customLabels || !parsed.errorTypes) {
-            console.warn(`ArabicText.tsx: Incomplete localStorage data for ${settingsKey}, removing data`);
+          if (
+            !parsed.errorKeysOrder ||
+            !parsed.customLabels ||
+            !parsed.errorTypes
+          ) {
+            console.warn(
+              `ArabicText.tsx: Incomplete localStorage data for ${settingsKey}, removing data`
+            );
             localStorage.removeItem(settingsKey);
             return false;
           }
@@ -314,10 +416,15 @@ export default defineComponent({
           customLabels.value = parsed.customLabels || {};
           errorKeysOrder.value = parsed.errorKeysOrder || [];
           errorTypes.value = parsed.errorTypes || {};
-          console.log(`ArabicText.tsx: Settings loaded from localStorage with key ${settingsKey}`);
+          console.log(
+            `ArabicText.tsx: Settings loaded from localStorage with key ${settingsKey}`
+          );
           return true;
         } catch (e) {
-          console.error("ArabicText.tsx: Failed to parse settings from localStorage:", e);
+          console.error(
+            "ArabicText.tsx: Failed to parse settings from localStorage:",
+            e
+          );
           localStorage.removeItem(settingsKey);
           return false;
         }
@@ -335,12 +442,20 @@ export default defineComponent({
       const newErrorTypes: Record<string, "ayat" | "kata"> = {};
 
       apiData.forEach((item: any) => {
-        if (item.key && typeof item.key === "string" && (item.key.startsWith("sa-") || item.key.startsWith("sk-"))) {
+        if (
+          item.key &&
+          typeof item.key === "string" &&
+          (item.key.startsWith("sa-") || item.key.startsWith("sk-"))
+        ) {
           const key = item.key;
-          const label = item.value && typeof item.value === "string" ? item.value : key;
+          const label =
+            item.value && typeof item.value === "string" ? item.value : key;
           newCheckedErrors[key] = item.status === 1;
           newCustomLabels[key] = label;
-          newErrorColors[key] = item.color && typeof item.color === "string" ? item.color : defaultColorMap[key] || "#CCCCCC";
+          newErrorColors[key] =
+            item.color && typeof item.color === "string"
+              ? item.color
+              : defaultColorMap[key] || "#CCCCCC";
           newErrorTypes[key] = item.key.startsWith("sa-") ? "ayat" : "kata";
 
           if (newErrorTypes[key] === "ayat") {
@@ -378,18 +493,29 @@ export default defineComponent({
       saveErrorSettings(settingsKey);
     };
 
-    const fetchSettings = async (groupId: number | null, userId: number | null) => {
+    const fetchSettings = async (
+      groupId: number | null,
+      userId: number | null
+    ) => {
       isLoadingSettings.value = true;
-      const settingsKey = groupId && !isNaN(groupId) ? `qurani_setting_grup_${groupId}` : userId && !isNaN(userId) ? "qurani_setting_user" : "qurani_setting_global";
+      const settingsKey =
+        groupId && !isNaN(groupId)
+          ? `qurani_setting_grup_${groupId}`
+          : userId && !isNaN(userId)
+          ? "qurani_setting_user"
+          : "qurani_setting_global";
 
       if (loadErrorSettingsFull(settingsKey)) {
-        console.log(`ArabicText.tsx: Using data from localStorage for ${settingsKey}`);
+        console.log(
+          `ArabicText.tsx: Using data from localStorage for ${settingsKey}`
+        );
         apiErrorMessage.value = null;
         isLoadingSettings.value = false;
         return;
       }
 
-      let apiUrl: string = "https://quranapi-production-b288.up.railway.app/api/v1";
+      let apiUrl: string =
+        "https://quranapi-production-b288.up.railway.app/api/v1";
       if (groupId && !isNaN(groupId)) {
         apiUrl = `${apiUrl}group-qurani-settings/${groupId}`;
         selectedGroup.value = { id: groupId };
@@ -419,9 +545,13 @@ export default defineComponent({
         processApiData(apiData, settingsKey);
         apiErrorMessage.value = null;
       } catch (error: unknown) {
-  console.error("Error:", error instanceof Error ? error.message : String(error));
-  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
-} finally {
+        console.error(
+          "Error:",
+          error instanceof Error ? error.message : String(error)
+        );
+        apiErrorMessage.value =
+          error instanceof Error ? error.message : String(error);
+      } finally {
         isLoadingSettings.value = false;
       }
     };
@@ -429,7 +559,11 @@ export default defineComponent({
     const handleSetoranDataReceived = (event: Event) => {
       const customEvent = event as CustomEvent;
       const data = customEvent.detail;
-      if (data.payloadType === "setoran" && data.group_id && !isNaN(Number(data.group_id))) {
+      if (
+        data.payloadType === "setoran" &&
+        data.group_id &&
+        !isNaN(Number(data.group_id))
+      ) {
         if (selectedGroup.value?.id !== Number(data.group_id)) {
           fetchSettings(Number(data.group_id), null);
         }
@@ -442,16 +576,24 @@ export default defineComponent({
 
     const availableErrorLabels = computed(() => {
       return errorKeysOrder.value.filter(
-        (key) => key in checkedErrors.value && checkedErrors.value[key] === true && key in customLabels.value && key in errorTypes.value
+        (key) =>
+          key in checkedErrors.value &&
+          checkedErrors.value[key] === true &&
+          key in customLabels.value &&
+          key in errorTypes.value
       );
     });
 
     const availableWordErrorLabels = computed(() => {
-      return availableErrorLabels.value.filter((key) => errorTypes.value[key] === "kata");
+      return availableErrorLabels.value.filter(
+        (key) => errorTypes.value[key] === "kata"
+      );
     });
 
     const availableVerseErrorLabels = computed(() => {
-      return availableErrorLabels.value.filter((key) => errorTypes.value[key] === "ayat");
+      return availableErrorLabels.value.filter(
+        (key) => errorTypes.value[key] === "ayat"
+      );
     });
 
     const shouldDisplayErrors = computed(() => {
@@ -470,7 +612,10 @@ export default defineComponent({
 
     function onClickHold(key: number) {
       return function () {
-        Object.keys(popoverInstance.value).forEach((keys) => Number(keys) !== key && popoverInstance.value[Number(keys)]?.hide());
+        Object.keys(popoverInstance.value).forEach(
+          (keys) =>
+            Number(keys) !== key && popoverInstance.value[Number(keys)]?.hide()
+        );
         popoverInstance.value[key]?.toggle();
         setTimeout(() => tooltipInstance.value[key]?.hide(), 100);
       };
@@ -490,24 +635,33 @@ export default defineComponent({
       }
 
       if (!Object.keys(customLabels.value).length) {
-        modalContent.value = "Pengaturan label belum dimuat. Silakan coba lagi.";
+        modalContent.value =
+          "Pengaturan label belum dimuat. Silakan coba lagi.";
         apiErrorMessage.value = "Gagal memuat label kesalahan.";
         isModalVisible.value = true;
         return;
       }
 
       const isAlreadyMarked = kesalahan.value.some(
-        (err) => (isVerseEnd && err.noAyat === props.verseNumber && err.kata === null) || (!isVerseEnd && err.kata?.id === word.id)
+        (err) =>
+          (isVerseEnd &&
+            err.noAyat === props.verseNumber &&
+            err.kata === null) ||
+          (!isVerseEnd && err.kata?.id === word.id)
       );
 
       if (isAlreadyMarked) {
         correctionTarget.value = isVerseEnd ? "ayat" : "kata";
-        modalContent.value = isVerseEnd ? `Hapus tanda pada ayat ${props.verseNumber}` : `Hapus tanda pada kata "${word.text_uthmani}"`;
+        modalContent.value = isVerseEnd
+          ? `Hapus tanda pada ayat ${props.verseNumber}`
+          : `Hapus tanda pada kata "${word.text_uthmani}"`;
         isModalVisible.value = true;
       } else {
         correctionTarget.value = isVerseEnd ? "ayat" : "kata";
         modalContent.value = isVerseEnd
-          ? `Surat ${chapter.value?.name_simple} Ayat ke ${props.verseNumber} (Halaman ${props.words[0]?.page_number || 0})`
+          ? `Surat ${chapter.value?.name_simple} Ayat ke ${
+              props.verseNumber
+            } (Halaman ${props.words[0]?.page_number || 0})`
           : `Kata ${word.text_uthmani} (Halaman ${word.page_number})`;
         isModalVisible.value = true;
       }
@@ -517,7 +671,12 @@ export default defineComponent({
     function getWordStyle(word: Words) {
       const errors = kesalahan.value.filter((err) => err.kata?.id === word.id);
       if (errors.length > 0 && errors[0].salahKey) {
-        return { backgroundColor: errorColors.value[errors[0].salahKey] || defaultColorMap[errors[0].salahKey] || "#CCCCCC" };
+        return {
+          backgroundColor:
+            errorColors.value[errors[0].salahKey] ||
+            defaultColorMap[errors[0].salahKey] ||
+            "#CCCCCC",
+        };
       }
       return {};
     }
@@ -525,13 +684,23 @@ export default defineComponent({
     function getWordErrorTooltip(word: Words) {
       const errors = kesalahan.value.filter((err) => err.kata?.id === word.id);
       if (errors.length === 0) return "";
-      return errors.map((err) => customLabels.value[err.salahKey] || err.salah || err.salahKey).join(", ");
+      return errors
+        .map(
+          (err) => customLabels.value[err.salahKey] || err.salah || err.salahKey
+        )
+        .join(", ");
     }
 
     function getVerseErrorTooltip() {
-      const errors = kesalahan.value.filter((err) => err.kata === null && err.noAyat === props.verseNumber);
+      const errors = kesalahan.value.filter(
+        (err) => err.kata === null && err.noAyat === props.verseNumber
+      );
       if (errors.length === 0) return "";
-      return errors.map((err) => customLabels.value[err.salahKey] || err.salah || err.salahKey).join(", ");
+      return errors
+        .map(
+          (err) => customLabels.value[err.salahKey] || err.salah || err.salahKey
+        )
+        .join(", ");
     }
 
     function handleKeydown(e: KeyboardEvent) {
@@ -540,17 +709,23 @@ export default defineComponent({
       }
     }
 
-    function markError(word: Words | null, salahKey: string, isVerseError: boolean = false) {
+    function markError(
+      word: Words | null,
+      salahKey: string,
+      isVerseError: boolean = false
+    ) {
       let pageNumber: number;
       let sanitizedWord: Kesalahan["kata"] = null;
 
       if (word && !isVerseError) {
         sanitizedWord = {
-          char_type: word.char_type_name,
+          char_type_name: word.char_type_name,
           id: word.id,
           text: word.text_uthmani,
         };
-        pageNumber = word.page_number || (props.words.length > 0 ? props.words[0].page_number : 1);
+        pageNumber =
+          word.page_number ||
+          (props.words.length > 0 ? props.words[0].page_number : 1);
       } else {
         pageNumber = props.words.length > 0 ? props.words[0].page_number : 1;
       }
@@ -559,11 +734,15 @@ export default defineComponent({
         (err) =>
           err.salahKey === salahKey &&
           err.noAyat === props.verseNumber &&
-          (isVerseError ? err.kata === null : err.kata?.id === sanitizedWord?.id)
+          (isVerseError
+            ? err.kata === null
+            : err.kata?.id === sanitizedWord?.id)
       );
 
       if (isDuplicate) {
-        console.log("ArabicText.tsx: Duplicate kesalahan detected, skipping addition.");
+        console.log(
+          "ArabicText.tsx: Duplicate kesalahan detected, skipping addition."
+        );
         closeModal();
         return;
       }
@@ -583,11 +762,18 @@ export default defineComponent({
       closeModal();
     }
 
-    function removeMarkedError(word: Words | null, isVerseError: boolean = false) {
+    function removeMarkedError(
+      word: Words | null,
+      isVerseError: boolean = false
+    ) {
       if (isVerseError) {
-        kesalahan.value = kesalahan.value.filter((err) => !(err.noAyat === props.verseNumber && err.kata === null));
+        kesalahan.value = kesalahan.value.filter(
+          (err) => !(err.noAyat === props.verseNumber && err.kata === null)
+        );
       } else if (word) {
-        kesalahan.value = kesalahan.value.filter((err) => err.kata?.id !== word.id);
+        kesalahan.value = kesalahan.value.filter(
+          (err) => err.kata?.id !== word.id
+        );
       }
       saveKesalahan();
       closeModal();
@@ -598,20 +784,6 @@ export default defineComponent({
       apiErrorMessage.value = null;
     }
 
-    function onMouseOver(key: number) {
-      isHover.value = true;
-      if (!props.showTooltipWhenHighlight || !isHighlightWord(key)) {
-        tooltipInstance.value[key]?.show();
-      }
-    }
-
-    function onMouseLeave(key: number) {
-      isHover.value = false;
-      if (!props.showTooltipWhenHighlight || !isHighlightWord(key)) {
-        tooltipInstance.value[key]?.hide();
-      }
-    }
-
     function wordWrapper(word: Words, children: any) {
       if (!shouldUseButton.value) {
         return children;
@@ -620,11 +792,19 @@ export default defineComponent({
         <Popover
           key={`popover-${word.id}`}
           placement="top"
-          options={{ html: true, trigger: "manual", content: () => refs.value.popoverContent! }}
+          options={{
+            html: true,
+            trigger: "manual",
+            content: () => refs.value.popoverContent!,
+          }}
           onInit={onInitPopover(word.position)}
         >
           {{
-            title: () => <div class="text-center">{t("quran-reader.word-number", { ayah: props.verseNumber })}</div>,
+            title: () => (
+              <div class="text-center">
+                {t("quran-reader.word-number", { ayah: props.verseNumber })}
+              </div>
+            ),
             default: () => children,
           }}
         </Popover>
@@ -632,13 +812,19 @@ export default defineComponent({
     }
 
     function selectWord(position: number) {
-      selectedWord.value = props.words.find((word) => word.position === position) || null;
+      selectedWord.value =
+        props.words.find((word) => word.position === position) || null;
     }
 
     function getVerseErrorStyle() {
-      const verseError = kesalahan.value.find((err) => err.kata === null && err.noAyat === props.verseNumber);
+      const verseError = kesalahan.value.find(
+        (err) => err.kata === null && err.noAyat === this.verseNumber
+      );
       if (verseError && verseError.salahKey) {
-        const color = errorColors.value[verseError.salahKey] || defaultColorMap[verseError.salahKey] || "#CCCCCC";
+        const color =
+          errorColors.value[verseError.salahKey] ||
+          defaultColorMap[verseError.salahKey] ||
+          "#CCCCCC";
         if (fontType.value === "Default") {
           return {
             backgroundColor: color,
@@ -664,13 +850,10 @@ export default defineComponent({
       chapter,
       textUthmani,
       popover,
-      isHover,
       shouldUseButton,
       isHighlightWord,
       onInitPopover,
       onClickHold,
-      onMouseOver,
-      onMouseLeave,
       wordWrapper,
       showWrongWordModal,
       handleVerseClick: () => {
@@ -720,11 +903,21 @@ export default defineComponent({
               style={{ background: "rgba(0, 0, 0, 0.5)" }}
               onClick={this.closeModal}
             >
-              <div class="modal-dialog modal-dialog-centered" onClick={(e: MouseEvent) => e.stopPropagation()}>
-                <div class="modal-content mt-5" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+              <div
+                class="modal-dialog modal-dialog-centered"
+                onClick={(e: MouseEvent) => e.stopPropagation()}
+              >
+                <div
+                  class="modal-content mt-5"
+                  style={{ maxHeight: "90vh", overflowY: "auto" }}
+                >
                   <div class="modal-header">
                     <h5 class="modal-title">{this.modalContent}</h5>
-                    <button type="button" class="btn-close" onClick={this.closeModal}></button>
+                    <button
+                      type="button"
+                      class="btn-close"
+                      onClick={this.closeModal}
+                    ></button>
                   </div>
                   <div class="modal-body">
                     {this.apiErrorMessage ? (
@@ -733,14 +926,23 @@ export default defineComponent({
                       </div>
                     ) : this.isLoadingSettings ? (
                       <p>Memuat label kesalahan...</p>
-                    ) : this.kesalahan && this.kesalahan.some(
+                    ) : this.kesalahan &&
+                      this.kesalahan.some(
                         (err) =>
-                          (this.correctionTarget === "ayat" && err.noAyat === this.verseNumber && err.kata === null) ||
-                          (this.correctionTarget === "kata" && err.kata?.id === this.selectedWord?.id)
+                          (this.correctionTarget === "ayat" &&
+                            err.noAyat === this.verseNumber &&
+                            err.kata === null) ||
+                          (this.correctionTarget === "kata" &&
+                            err.kata?.id === this.selectedWord?.id)
                       ) ? (
                       <button
                         class="w-100 mb-2 btn btn-danger"
-                        onClick={() => this.removeMarkedError(this.selectedWord, this.correctionTarget === "ayat")}
+                        onClick={() =>
+                          this.removeMarkedError(
+                            this.selectedWord,
+                            this.correctionTarget === "ayat"
+                          )
+                        }
                       >
                         Hapus Tanda
                       </button>
@@ -751,16 +953,23 @@ export default defineComponent({
                             <button
                               key={key}
                               class="w-100 mb-2 btn"
-                              onClick={() => this.markError(this.selectedWord, key)}
+                              onClick={() =>
+                                this.markError(this.selectedWord, key)
+                              }
                               style={{
-                                backgroundColor: this.errorColors[key] || this.defaultColorMap[key] || "#CCCCCC",
+                                backgroundColor:
+                                  this.errorColors[key] ||
+                                  defaultColorMap[key] || // Fixed TS2339
+                                  "#CCCCCC",
                                 borderWidth: "2px",
                                 fontWeight: "500",
                                 textAlign: "left",
                                 color: "#000000",
                               }}
                             >
-                              {key in this.customLabels ? this.customLabels[key] : key}
+                              {key in this.customLabels
+                                ? this.customLabels[key]
+                                : key}
                             </button>
                           ))
                         ) : (
@@ -776,14 +985,19 @@ export default defineComponent({
                               class="w-100 mb-2 btn"
                               onClick={() => this.markError(null, key, true)}
                               style={{
-                                backgroundColor: this.errorColors[key] || this.defaultColorMap[key] || "#CCCCCC",
+                                backgroundColor:
+                                  this.errorColors[key] ||
+                                  defaultColorMap[key] || // Fixed TS2339
+                                  "#CCCCCC",
                                 borderWidth: "2px",
                                 fontWeight: "500",
                                 textAlign: "left",
                                 color: "#000000",
                               }}
                             >
-                              {key in this.customLabels ? this.customLabels[key] : key}
+                              {key in this.customLabels
+                                ? this.customLabels[key]
+                                : key}
                             </button>
                           ))
                         ) : (
@@ -799,70 +1013,95 @@ export default defineComponent({
         </Teleport>
         <Tooltip
           tag="span"
-         options={({
-  trigger: "hover",
-  html: true,
-  placement: "top",
-  delay: { show: 200, hide: 200 },
-  content: this.getVerseErrorTooltip(),
-  container: "body",
-} as TooltipOptions)}
+          options={{
+            html: true,
+            placement: "top",
+            delay: { show: 200, hide: 200 },
+            title: this.getVerseErrorTooltip(), // Fixed TS2322
+            container: "body",
+          } as TooltipOptions}
           onInit={this.onInitErrorTooltip(`verse-${this.verseKey}`)}
           dir="rtl"
           class={[
             styles.arabic_text,
             {
               [styles.highlight]: this.highlight === true,
-              [styles.hover]: this.isHover && this.enableHover,
-              [styles.verse_error]: this.kesalahan && this.kesalahan.some(
-                (err) => err.kata === null && err.noAyat === this.verseNumber
-              ),
+              [styles.verse_error]:
+                this.kesalahan &&
+                this.kesalahan.some(
+                  (err) => err.kata === null && err.noAyat === this.verseNumber
+                ),
             },
           ]}
-          style={[{ ...this.getVerseErrorStyle(), position: "relative" }, this.getVerseErrorTooltip() ? { cursor: "default" } : {}]}
-          onMouseover={() => (this.isHover = true)}
-          onMouseleave={() => (this.isHover = false)}
+          style={[
+            { ...this.getVerseErrorStyle(), position: "relative" },
+            this.getVerseErrorTooltip() ? { cursor: "default" } : {},
+          ]}
         >
           {this.words.map((word: Words) =>
-            this.wordWrapper(word, (
+            this.wordWrapper(
+              word,
               <Tooltip
                 key={`tooltip-${word.id}`}
                 tag="div"
                 timeout={0}
                 options={{
-                  trigger: "hover",
                   html: true,
                   delay: { show: 200, hide: 200 },
                   placement: "top",
-                  content: this.getWordErrorTooltip(word),
+                  title: this.getWordErrorTooltip(word), // Fixed TS2322
                   container: "body",
-                }}
+                } as TooltipOptions}
                 onInit={this.onInitErrorTooltip(`word-${word.id}`)}
-                class={[styles.text_wrapper, { [styles.highlight_word]: this.isHighlightWord(word.position), "ps-2": this.showTransliterationInline }]}
+                class={[
+                  styles.text_wrapper,
+                  {
+                    [styles.highlight_word]: this.isHighlightWord(
+                      word.position
+                    ),
+                    "ps-2": this.showTransliterationInline,
+                  },
+                ]}
                 {...{
                   "data-word-position": word.position,
                   "data-word-location": word.location,
                   "data-word-type": word.char_type_name,
                 }}
-                style={[{ ...this.getWordStyle(word), position: "relative" }, this.getWordErrorTooltip(word) ? { cursor: "default" } : {}]}
+                style={[
+                  { ...this.getWordStyle(word), position: "relative" },
+                  this.getWordErrorTooltip(word) ? { cursor: "default" } : {},
+                ]}
               >
                 <div
-                  class={["fs-arabic-auto", "text-center", { "font-uthmanic": word.char_type_name === "end", "font-arabic-auto": word.char_type_name === "word" }]}
+                  class={[
+                    "fs-arabic-auto",
+                    "text-center",
+                    {
+                      "font-uthmanic": word.char_type_name === "end",
+                      "font-arabic-auto": word.char_type_name === "word",
+                    },
+                  ]}
                 >
                   {this.decodeUnicode(word.text_uthmani)}
                 </div>
                 {this.showTransliterationInline && (
                   <div class="text-center mt-1 mb-1">
-                    <i>{word.char_type_name === "word" ? word.transliteration?.text : word.translation?.text}</i>
+                    <i>
+                      {word.char_type_name === "word"
+                        ? word.transliteration?.text
+                        : word.translation?.text}
+                    </i>
                   </div>
                 )}
-                {this.showTranslationInline && (word.char_type_name === "word" || !this.showTransliterationInline) && (
-                  <div class="text-center mt-1 mb-1">
-                    <p>{word.translation?.text}</p>
-                  </div>
-                )}
+                {this.showTranslationInline &&
+                  (word.char_type_name === "word" ||
+                    !this.showTransliterationInline) && (
+                    <div class="text-center mt-1 mb-1">
+                      <p>{word.translation?.text}</p>
+                    </div>
+                  )}
               </Tooltip>
-            ))
+            )
           )}
         </Tooltip>
       </>

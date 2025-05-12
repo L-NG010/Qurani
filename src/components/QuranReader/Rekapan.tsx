@@ -655,6 +655,9 @@ export default defineComponent({
             if (window.top) {
               window.top.location.href = `${apiUrl}/qurani`;
             }
+            else {
+    window.location.href = `${apiUrl}/qurani`;
+  }
           }, 3000);
 
           setTimeout(() => {
@@ -682,7 +685,9 @@ export default defineComponent({
     function goBack() {
       if (window.top) {
         window.top.location.href = `${apiUrl}/qurani`;
-      }
+      }else {
+    window.location.href = `${apiUrl}/qurani`;
+  }
     }
 
     const surahOptions = computed(() => {

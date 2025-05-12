@@ -300,10 +300,12 @@ export default defineComponent({
     };
 
     function goBack() {
-      if (window.top) {
-        window.top.location.href = "http://localhost/qurani";
-      }
-    }
+  if (window.top && window.top !== window) {
+    window.top.location.href = "http://localhost/qurani";
+  } else {
+    window.location.href = "http://localhost/qurani";
+  }
+}
 
     function getDetailUrl() {
       if (setoranData.value?.tampilkan_type === "juz" && setoranData.value.juz_id) {

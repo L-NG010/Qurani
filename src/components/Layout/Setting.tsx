@@ -50,6 +50,7 @@ export default defineComponent({
     const errorTypes = ref<Record<string, "ayat" | "kata">>({});
     const resetErrorMessage = ref<string | null>(null);
     const apiErrorMessage = ref<string | null>(null);
+    const isLoadingSettings = ref<boolean>(false);
 
     const perAyatKeys = computed(() => {
       return errorKeysOrder.value.filter((key) => errorTypes.value[key] === "ayat");
@@ -117,16 +118,19 @@ export default defineComponent({
       }
 
       try {
-        const response = await fetch(apiUrl, { method });
-        if (!response.ok) {
-          throw new Error(`Gagal mereset pengaturan: ${response.status}`);
-        }
-        localStorage.removeItem(settingsKey);
-        await fetchSettings(selectedGroup.value?.id, selectedUser.value?.id);
-      } catch (error: unknown) {
-        console.error("Error:", error instanceof Error ? error.message : String(error));
-        apiErrorMessage.value = error instanceof Error ? error.message : String(error);
-      }
+  const response = await fetch(apiUrl);
+  if (!response.ok) {
+    throw new Error(`Gagal mengambil pengaturan: ${response.status}`);
+  }
+  const apiData = await response.json();
+  processApiData(apiData, settingsKey);
+  apiErrorMessage.value = null;
+} catch (error) {
+  console.error("Error:", error instanceof Error ? error.message : String(error));
+  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
+} finally {
+  isLoadingSettings.value = false;
+}
     };
 
     const processApiData = (apiData: any[], settingsKey: string) => {
