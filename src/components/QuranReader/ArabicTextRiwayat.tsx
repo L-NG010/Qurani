@@ -22,9 +22,7 @@ import styles from "./ArabicText.module.scss";
 import AlertDialog from "../AlertDialog/AlertDialog";
 import { useSettings } from "@/hooks/settings";
 
-interface TooltipOptions extends Partial<BSTooltip.Options> {
-  // Removed content; using title from BSTooltip.Options
-}
+interface TooltipOptions extends Partial<BSTooltip.Options> {}
 
 interface Kesalahan {
   salahKey: string;
@@ -33,7 +31,7 @@ interface Kesalahan {
   Page: number;
   noAyat: number;
   kata: {
-    char_type_name: string; // Fixed to match Words
+    char_type_name: string;
     id: number;
     text: string;
   } | null;
@@ -305,10 +303,10 @@ export default defineComponent({
               kesalahan.value
             );
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(
             "ArabicTextRiwayat.tsx: Failed to parse setoranData:",
-            error
+            error instanceof Error ? error.message : String(error)
           );
         }
       }
@@ -322,10 +320,10 @@ export default defineComponent({
           errorColors.value = parsed.errorColors || {};
           customLabels.value = parsed.customLabels || {};
           console.log("ArabicText.tsx: Loaded error settings:", parsed);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(
             "ArabicText.tsx: Failed to parse qurani_setting_global:",
-            error
+            error instanceof Error ? error.message : String(error)
           );
         }
       }
@@ -387,10 +385,10 @@ export default defineComponent({
         console.log(
           `ArabicText.tsx: Settings saved to localStorage with key ${settingsKey}`
         );
-      } catch (e) {
+      } catch (error: unknown) {
         console.error(
           `ArabicText.tsx: Failed to save to localStorage with key ${settingsKey}:`,
-          e
+          error instanceof Error ? error.message : String(error)
         );
       }
     };
@@ -420,10 +418,10 @@ export default defineComponent({
             `ArabicText.tsx: Settings loaded from localStorage with key ${settingsKey}`
           );
           return true;
-        } catch (e) {
+        } catch (error: unknown) {
           console.error(
             "ArabicText.tsx: Failed to parse settings from localStorage:",
-            e
+            error instanceof Error ? error.message : String(error)
           );
           localStorage.removeItem(settingsKey);
           return false;
@@ -517,13 +515,13 @@ export default defineComponent({
       let apiUrl: string =
         "https://quranapi-production-b288.up.railway.app/api/v1";
       if (groupId && !isNaN(groupId)) {
-        apiUrl = `${apiUrl}group-qurani-settings/${groupId}`;
+        apiUrl = `${apiUrl}/group-qurani-settings/${groupId}`;
         selectedGroup.value = { id: groupId };
         selectedUser.value = null;
         localStorage.setItem("selectedGroup", JSON.stringify({ id: groupId }));
         localStorage.removeItem("selectedUser");
       } else if (userId && !isNaN(userId)) {
-        apiUrl = `${apiUrl}user-qurani-settings/${userId}`;
+        apiUrl = `${apiUrl}/user-qurani-settings/${userId}`;
         selectedUser.value = { id: userId };
         selectedGroup.value = null;
         localStorage.setItem("selectedUser", JSON.stringify({ id: userId }));
@@ -818,7 +816,7 @@ export default defineComponent({
 
     function getVerseErrorStyle() {
       const verseError = kesalahan.value.find(
-        (err) => err.kata === null && err.noAyat === this.verseNumber
+        (err) => err.kata === null && err.noAyat === props.verseNumber
       );
       if (verseError && verseError.salahKey) {
         const color =
@@ -959,7 +957,7 @@ export default defineComponent({
                               style={{
                                 backgroundColor:
                                   this.errorColors[key] ||
-                                  defaultColorMap[key] || // Fixed TS2339
+                                  this.defaultColorMap[key] ||
                                   "#CCCCCC",
                                 borderWidth: "2px",
                                 fontWeight: "500",
@@ -987,7 +985,7 @@ export default defineComponent({
                               style={{
                                 backgroundColor:
                                   this.errorColors[key] ||
-                                  defaultColorMap[key] || // Fixed TS2339
+                                  this.defaultColorMap[key] ||
                                   "#CCCCCC",
                                 borderWidth: "2px",
                                 fontWeight: "500",
@@ -1017,8 +1015,9 @@ export default defineComponent({
             html: true,
             placement: "top",
             delay: { show: 200, hide: 200 },
-            title: this.getVerseErrorTooltip(), // Fixed TS2322
+            title: this.getVerseErrorTooltip(),
             container: "body",
+            trigger: "click", // Changed to click to avoid hover
           } as TooltipOptions}
           onInit={this.onInitErrorTooltip(`verse-${this.verseKey}`)}
           dir="rtl"
@@ -1035,7 +1034,7 @@ export default defineComponent({
           ]}
           style={[
             { ...this.getVerseErrorStyle(), position: "relative" },
-            this.getVerseErrorTooltip() ? { cursor: "default" } : {},
+            this.getVerseErrorTooltip() ? { cursor: "pointer" } : {},
           ]}
         >
           {this.words.map((word: Words) =>
@@ -1049,8 +1048,9 @@ export default defineComponent({
                   html: true,
                   delay: { show: 200, hide: 200 },
                   placement: "top",
-                  title: this.getWordErrorTooltip(word), // Fixed TS2322
+                  title: this.getWordErrorTooltip(word),
                   container: "body",
+                  trigger: "click", // Changed to click to avoid hover
                 } as TooltipOptions}
                 onInit={this.onInitErrorTooltip(`word-${word.id}`)}
                 class={[
@@ -1069,7 +1069,7 @@ export default defineComponent({
                 }}
                 style={[
                   { ...this.getWordStyle(word), position: "relative" },
-                  this.getWordErrorTooltip(word) ? { cursor: "default" } : {},
+                  this.getWordErrorTooltip(word) ? { cursor: "pointer" } : {},
                 ]}
               >
                 <div
@@ -1096,7 +1096,7 @@ export default defineComponent({
                 {this.showTranslationInline &&
                   (word.char_type_name === "word" ||
                     !this.showTransliterationInline) && (
-                    <div class="text-center mt-1 mb-1">
+                    <div class="text-center mt-1 mb-1 Schumann">
                       <p>{word.translation?.text}</p>
                     </div>
                   )}
