@@ -1,5 +1,5 @@
 import { Chapters, QuranReader, Words } from "@/types";
-import { defineComponent, PropType, ref, computed, Teleport, onMounted, onBeforeUnmount, inject } from "vue";
+import { defineComponent, PropType, ref, computed, Teleport, onMounted, onBeforeUnmount, inject ,Ref} from "vue";
 import { Tooltip as BSTooltip, Popover as BSPopover } from "bootstrap";
 import { useI18n } from "vue-i18n";
 import { useChapters } from "@/hooks/chapters";

@@ -1,5 +1,5 @@
 import { Chapters, QuranReader, Words } from "@/types";
-import { defineComponent, PropType, ref, computed, Teleport, onMounted, onBeforeUnmount, inject } from "vue";
+import { defineComponent, PropType, ref, computed, Teleport, onMounted, onBeforeUnmount, inject,Ref } from "vue";
 import { Tooltip as BSTooltip, Popover as BSPopover } from "bootstrap";
 import { useI18n } from "vue-i18n";
 import { useChapters } from "@/hooks/chapters";
@@ -179,22 +179,22 @@ export default defineComponent({
     }
 
     function loadSetoranData() {
-      const data = localStorage.getItem("setoranData");
-      if (data) {
-        try {
-          setoranData.value = JSON.parse(data);
-          hasHasil.value = setoranData.value && "hasil" in setoranData.value;
-          if (hasHasil.value && setoranData.value.kesalahan) {
-            const parsedKesalahan = JSON.parse(setoranData.value.kesalahan);
-            const ayatKesalahan = parsedKesalahan.ayatSalah.map((err: any) => ({
-              salahKey: err.salahKey,
-              salah: err.jenisKesalahan,
-              NamaSurat: err.surah,
-              Page: err.page,
-              noAyat: err.ayat,
-              kata: null,
-            }));
-            const kataKesalahan: Kesalahan[] = [];
+  const data = localStorage.getItem("setoranData");
+  if (data) {
+    try {
+      setoranData.value = JSON.parse(data);
+      hasHasil.value = setoranData.value !== null && "hasil" in setoranData.value;
+      if (hasHasil.value && setoranData.value!.kesalahan) {
+        const parsedKesalahan = JSON.parse(setoranData.value!.kesalahan);
+        const ayatKesalahan = parsedKesalahan.ayatSalah.map((err: any) => ({
+          salahKey: err.salahKey,
+          salah: err.jenisKesalahan,
+          NamaSurat: err.surah,
+          Page: err.page || (props.words.length > 0 ? props.words[0].page_number : 1),
+          noAyat: err.ayat,
+          kata: null,
+        }));
+        const kataKesalahan: Kesalahan[] = [];
             Object.entries(parsedKesalahan.kataSalah).forEach(([salah, data]: [string, any]) => {
               const words = data.words;
               let wordIndex = 0;
@@ -226,11 +226,11 @@ export default defineComponent({
             kesalahan.value = [...filteredAyatKesalahan, ...filteredKataKesalahan];
             console.log("ArabicText.tsx: Loaded and filtered kesalahan from setoranData:", kesalahan.value);
           }
-        } catch (error) {
-          console.error("ArabicText.tsx: Failed to parse setoranData:", error);
-        }
-      }
+    } catch (error) {
+      console.error("ArabicTextRiwayat.tsx: Failed to parse setoranData:", error);
     }
+  }
+}
 
     function loadErrorSettings() {
       const settings = localStorage.getItem("qurani_setting_global");
