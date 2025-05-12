@@ -82,37 +82,10 @@ export type ChapterInfo = {
     source: string,
     text: string
 }
-export type Tafsirs = {
-    id: number
-    name: string
-    author_name: string
-    slug: string
-    language_name: string
-    translated_name: {
-        name: string
-        language_name: string
-    }
-}
-export type TafsirsData = {
-    language_id: number
-    resource_id: number
-    resource_name: string
-    slug: string
-    text: string
-    translated_name: {
-        name: string
-        language_name: string
-    }
-    verses: Record<string, {
-        id: number
-        words: Words[]
-    }>
-}
 
 enum PropsButton {
     "Bookmark",
     "Copy",
-    "Tafsir",
     "Play"
 }
 
@@ -137,11 +110,6 @@ interface AudioData {
 export type QuranReader = {
     READ_MODE: "translated" | "read"
     PROPS_BUTTON: Array<keyof typeof PropsButton>
-    TAFSIR_MODAL: {
-        isOpen: boolean
-        chapterId: number
-        verseNumber: number
-    }
 }
 
 export type AudioPlayer = {

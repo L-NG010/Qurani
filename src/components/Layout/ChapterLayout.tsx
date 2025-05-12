@@ -42,7 +42,7 @@ export default defineComponent({
     const chapters = useChapters();
     const search = ref<{ chapter: string, ayah: number | null }>({ chapter: "", ayah: null });
     const root = ref<HTMLElement | null>(null);
-    const router = useRouter();
+    const router = useRouter(); 
     const { translateMode } = useQuranReader();
 
     // Ketika tombol SELESAI ditekan, kirim nilai awal halaman lewat query

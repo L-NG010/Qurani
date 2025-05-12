@@ -5,18 +5,13 @@ import { QuranReader } from "@/types";
 
 interface UseQuranReader {
     highlightVerse: Ref<string | null>
-    tafsirModal: Ref<QuranReader["TAFSIR_MODAL"]>
     translateMode: WritableComputedRef<QuranReader["READ_MODE"]>
 }
 
 export const useQuranReader = createGlobalState<() => UseQuranReader>((): UseQuranReader => {
     const storage = useLocalStorage();
     const highlightVerse = ref<string | null>(null);
-    const tafsirModal = ref<QuranReader["TAFSIR_MODAL"]>({
-        isOpen: false,
-        chapterId: 0,
-        verseNumber: 0
-    });
+   
 
     const translateMode = computed<QuranReader["READ_MODE"]>({
         set(value) {
@@ -30,6 +25,5 @@ export const useQuranReader = createGlobalState<() => UseQuranReader>((): UseQur
     return {
         highlightVerse,
         translateMode,
-        tafsirModal
     }
 });

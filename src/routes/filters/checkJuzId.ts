@@ -1,4 +1,5 @@
-import { Context } from "./types";
+import { Context } from "./types"
+
 
 export default () => (ctx: Context) => {
 	const juzId = Number(ctx.to.params.id);

@@ -47,7 +47,7 @@ export default defineComponent({
                         words={verse.words}
                         translations={verse.translations}
                         showFooter={false}
-                        buttons={["Bookmark", "Copy", "Tafsir"]}
+                        buttons={["Bookmark", "Copy"]}
                         {...attribute}
                     />
                 )
@@ -57,7 +57,7 @@ export default defineComponent({
                         verseNumber={verse.verse_number}
                         chapterId={props.chapterId}
                         words={verse.words}
-                        buttons={["Bookmark", "Copy", "Tafsir"]}
+                        buttons={["Bookmark", "Copy"]}
                         {...attribute}
                     />
                 )

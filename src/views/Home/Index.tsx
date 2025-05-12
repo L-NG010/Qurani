@@ -84,6 +84,20 @@ export default defineComponent({
       }
     }
 
+    function navigateToPage() {
+      if (!isInputFilled.value) {
+        toast.error("Nomor halaman tidak valid");
+        return;
+      }
+      const p = parseInt(halamanInput.value, 10);
+      if (!isNaN(p) && p >= 1 && p <= 604) {
+        router.push({ name: "page", params: { page: p } });
+      } else {
+        toast.error("Nomor halaman tidak valid");
+      }
+    }
+    
+
     // ===== Data untuk tab ekstra: Grup & Pengguna =====
     // Data untuk Grup & Anggota
     const groups = ref([
@@ -244,6 +258,7 @@ export default defineComponent({
       halamanInput,
       isInputFilled,
       navigateToSurah,
+      navigateToPage,
       extraTab,
       groups,
       selectedGroup,
@@ -460,11 +475,11 @@ export default defineComponent({
                 }}
                 onKeyup={(e: KeyboardEvent) => {
                   if (e.key === "Enter") {
-                    this.navigateToSurah();
+                    this.navigateToPage();
                   }
                 }}
               />
-              <button class="btn btn-primary" disabled={!this.isInputFilled} onClick={this.navigateToSurah}>
+              <button class="btn btn-primary" disabled={!this.isInputFilled} onClick={this.navigateToPage}>
                 {this.t("general.gopage")}
               </button>
             </div>

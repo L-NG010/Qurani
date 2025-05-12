@@ -12,7 +12,6 @@ import ChapterLayout from "@/components/Layout/ChapterLayout";
 import PageSkeleton from "./PageSkeleton";
 import Page from "./Page";
 import isElementInViewport from "@/helpers/is-element-in-viewport";
-import TafsirModal from "@/components/Tafsir/TafsirModal";
 import setPageTitle from "@/helpers/set-page-title";
 
 
@@ -27,9 +26,10 @@ export default defineComponent({
         const activeAyah = ref<number>(0);
         const page = ref<number>(0);
         const juzData = ref<(Juzs & { chapters: Chapters[] })[]>([]);
-        const { translateMode, highlightVerse, tafsirModal } = useQuranReader();
         const { activeTimestamp, isPlaying, isAutoScroll, audioId } = useAudioPlayer();
         const { y } = useScroll(window);
+        const highlightVerse = ref<string | null>(null);
+
 
         const juzId = computed<number>(() => {
             return Number(route.params.id);
@@ -37,11 +37,11 @@ export default defineComponent({
 
         const keys = computed<string>(() => {
             return [
-                translateMode.value,
                 juzId.value,
                 setting.locale.value
             ].toString();
         });
+        
 
         const loadJuzData = async () => {
             const response = await httpRetry.get<{ juzs: Juzs[] }>(makeUrl("juzs"));
@@ -131,7 +131,6 @@ export default defineComponent({
             root,
             page,
             activeAyah,
-            tafsirModal,
             loaded,
             handleClickAyah
         }
@@ -139,11 +138,7 @@ export default defineComponent({
     render() {
         return (
             <Fragment>
-                <TafsirModal
-                    v-model:open={this.tafsirModal.isOpen}
-                    v-model:chapterId={this.tafsirModal.chapterId}
-                    v-model:verseNumber={this.tafsirModal.verseNumber}
-                />
+            
     
                 {this.juzData.map(juz => (
                     <Fragment key={juz.id}>

@@ -1,26 +1,31 @@
 import { Chapters, QuranReader, Words } from "@/types";
-import { defineComponent, PropType, ref, watch, onBeforeUnmount, VNode, computed, Teleport, onMounted, h, nextTick } from "vue";
+import { defineComponent, PropType, ref, computed, Teleport, onMounted, onBeforeUnmount, inject } from "vue";
 import { Tooltip as BSTooltip, Popover as BSPopover } from "bootstrap";
 import { useI18n } from "vue-i18n";
 import { useChapters } from "@/hooks/chapters";
 import Tooltip from "../Tooltip/Tooltip";
 import ButtonBookmark from "./Button/Bookmark";
 import ButtonCopy from "./Button/Copy";
-import ButtonTafsir from "./Button/Tafsir";
 import ButtonPlay from "./Button/Play";
 import Popover from "../Popover/Popover";
 import styles from "./ArabicText.module.scss";
 import AlertDialog from "../AlertDialog/AlertDialog";
 import { useSettings } from "@/hooks/settings";
 
-// Interface untuk data kesalahan yang ditandai
-interface MarkedError {
-  word: Words | null; // Jika null, berarti kesalahan pada level ayat
-  Kesalahan: string;
-  verseNumber: number;
-  chapterName: string;
-  isVerseError: boolean; // Menandakan apakah kesalahan terjadi pada level ayat
-  page?: number; // Nomor halaman (diambil dari word.page_number)
+// Interface Kesalahan
+interface Kesalahan {
+  salahKey: string;
+  salah: string;
+  NamaSurat: string;
+  Page: number;
+  noAyat: number;
+  verseKey: string;
+  wordKey?: string;
+  kata: {
+    char_type: string;
+    id: number;
+    text: string;
+  } | null;
 }
 
 export default defineComponent({
@@ -69,258 +74,509 @@ export default defineComponent({
     },
   },
   setup(props) {
-    // Inisialisasi i18n dan hooks
     const { t } = useI18n();
     const chapters = useChapters();
     const settings = useSettings();
     const { fontType } = settings;
 
-    // Instance tooltip dan popover untuk Bootstrap
+    // Inject with fallback
+    const kesalahan = inject<Ref<Kesalahan[]>>("kesalahan", ref<Kesalahan[]>([]));
+    const saveKesalahan = inject<() => void>("saveKesalahan", () => {
+      console.warn("ArabicText.tsx: saveKesalahan not provided, using fallback.");
+      try {
+        const groupedData = {
+          ayatSalah: kesalahan.value
+            .filter((err) => err.kata === null)
+            .map((err) => ({
+              surah: err.NamaSurat,
+              ayat: err.noAyat,
+              jenisKesalahan: err.salah,
+              salahKey: err.salahKey,
+              page: err.Page,
+              verseKey: err.verseKey,
+            })),
+          kataSalah: kesalahan.value
+            .filter((err) => err.kata !== null)
+            .reduce((acc, err) => {
+              const key = err.salah;
+              if (!acc[key]) {
+                acc[key] = {
+                  count: 0,
+                  words: [],
+                  wordKeys: [],
+                  salahKey: err.salahKey,
+                  page: err.Page,
+                  verseKey: err.verseKey,
+                };
+              }
+              acc[key].count += 1;
+              acc[key].words.push(err.kata!.text);
+              acc[key].wordKeys.push(err.wordKey || `${err.verseKey}:${err.kata!.id}`);
+              return acc;
+            }, {} as Record<string, { count: number; words: string[]; wordKeys: string[]; salahKey: string; page: number; verseKey: string }>),
+        };
+        localStorage.setItem("kesalahan", JSON.stringify(groupedData));
+        console.log("ArabicText.tsx: Saved grouped kesalahan to localStorage:", groupedData);
+      } catch (error) {
+        console.error("ArabicText.tsx: Failed to save kesalahan (fallback):", error);
+      }
+    });
+
+    // Fungsi untuk memuat kesalahan dengan aman
+    const loadKesalahan = () => {
+      const storedKesalahan = localStorage.getItem("kesalahan");
+      if (storedKesalahan) {
+        try {
+          const parsed = JSON.parse(storedKesalahan);
+          if (parsed.ayatSalah && parsed.kataSalah) {
+            const ayatKesalahan = parsed.ayatSalah.map((err: any) => ({
+              salahKey: err.salahKey,
+              salah: err.jenisKesalahan,
+              NamaSurat: err.surah,
+              Page: err.page || (props.words.length > 0 ? props.words[0].page_number : 0),
+              noAyat: err.ayat,
+              verseKey: err.verseKey || `${props.chapterId}:${err.ayat}`,
+              kata: null,
+            }));
+            const kataKesalahan = Object.entries(parsed.kataSalah).flatMap(([salah, data]: [string, any]) =>
+              data.words.map((text: string, index: number) => ({
+                salahKey: data.salahKey,
+                salah,
+                NamaSurat: chapter.value?.name_simple || "",
+                Page: data.page || (props.words.length > 0 ? props.words[0].page_number : 0),
+                noAyat: props.verseNumber || 0,
+                verseKey: data.verseKey || `${props.chapterId}:${props.verseNumber}`,
+                wordKey: data.wordKeys?.[index] || `${props.chapterId}:${props.verseNumber}:${Date.now() + index}`,
+                kata: { char_type: "word", id: Date.now() + index, text },
+              }))
+            );
+            kesalahan.value = [...ayatKesalahan, ...kataKesalahan];
+            console.log("ArabicText.tsx: Loaded and converted kesalahan from localStorage:", kesalahan.value);
+          } else if (Array.isArray(parsed)) {
+            kesalahan.value = parsed.map((err: any) => ({
+              ...err,
+              verseKey: err.verseKey || `${props.chapterId}:${err.noAyat}`,
+              wordKey: err.kata ? err.wordKey || `${props.chapterId}:${err.noAyat}:${err.kata.id}` : undefined,
+            }));
+            console.log("ArabicText.tsx: Loaded kesalahan from localStorage:", kesalahan.value);
+          } else {
+            console.warn("ArabicText.tsx: Invalid kesalahan data in localStorage, resetting to empty array.");
+            kesalahan.value = [];
+          }
+        } catch (error) {
+          console.error("ArabicText.tsx: Failed to load kesalahan from localStorage:", error);
+          kesalahan.value = [];
+        }
+      }
+    };
+
     const tooltipInstance = ref<Record<number, BSTooltip>>({});
     const popoverInstance = ref<Record<number, BSPopover>>({});
     const popover = ref<BSPopover | null>(null);
-
-    // State untuk hover dan modal
     const isHover = ref<boolean>(false);
     const isModalVisible = ref<boolean>(false);
     const modalContent = ref<string>("");
-
-    // Ref untuk element konten popover
+    const isLoadingSettings = ref<boolean>(false);
     const refs = ref<{ popoverContent: HTMLElement | null }>({ popoverContent: null });
-
-    // Computed key untuk ayat (contoh: "2:255")
     const verseKey = computed<string>(() => {
       return [props.chapterId, props.verseNumber].filter((v) => v !== undefined).join(":");
     });
-
-    // Mendapatkan data chapter dari hook
     const chapter = computed<Chapters | null>(() => {
       return props.chapterId ? chapters.find(props.chapterId) : null;
     });
-
-    // Teks Uthmani gabungan untuk ayat
     const textUthmani = computed<string>(() => {
       return props.words.map((word) => word.text_uthmani).join(" ");
     });
-
-    // Menentukan apakah tombol tambahan (Bookmark, Copy, dsb) akan ditampilkan
     const shouldUseButton = computed<boolean>(() => {
       return props.buttons.length > 0 && props.chapterId !== undefined && props.verseNumber !== undefined;
     });
-
-    // State untuk menentukan target penandaan: 'ayat' atau 'kata'
-    const correctionTarget = ref<'ayat' | 'kata'>('kata');
-    // Kata yang dipilih berdasarkan id (unik) sehingga jika ada kata dengan teks sama, hanya satu yang terpengaruh
+    const correctionTarget = ref<"ayat" | "kata">("kata");
     const selectedWord = ref<Words | null>(null);
-    // Array untuk menyimpan data kesalahan yang ditandai
-    const markedErrors = ref<MarkedError[]>([]);
-
-    // Warna background untuk tiap tipe kesalahan (default mapping)
-    const errorColors: { [key: string]: string } = {
-      'Gharib': '#CCCCCC',
-      'Ghunnah': '#99CCFF',
-      'Harokat Tertukar': '#DFF18F',
-      'Huruf Tambah/Kurang': '#F4ACB6',
-      'Lupa (tidak dibaca)': '#FA7656',
-      'Mad (panjang pendek)': '#FFCC99',
-      'Makhroj (pengucapan huruf)': '#F4A384',
-      'Nun Mati dan Tanwin': '#F8DD74',
-      'Qalqalah (memantul)': '#D5B6D4',
-      'Tasydid (penekanan)': '#B5C9DF',
-      'Urutan Huruf atau Kata': '#FE7D8F',
-      'Waqof atau Washol (berhenti atau lanjut)': '#A1D4CF',
-      'Waqof dan Ibtida (berhenti dan memulai)': '#90CBAA',
-      'Lainnya': '#CC99CC',
-      'Ayat Lupa (tidak dibaca)': '#FA7656',
-      'Ayat Waqof atau Washol (berhenti atau lanjut)': '#FE7D8F',
-      'Ayat Waqof dan Ibtida (berhenti dan memulai)': '#90CBAA',
-    };
-
-    // Tambahkan ref untuk selectedUser dan selectedGroup (diambil dari localStorage)
+    const errorColors = ref<Record<string, string>>({});
+    const checkedErrors = ref<Record<string, boolean>>({});
+    const customLabels = ref<Record<string, string>>({});
+    const errorKeysOrder = ref<string[]>([]);
+    const errorTypes = ref<Record<string, "ayat" | "kata">>({});
     const selectedUser = ref<any>(null);
     const selectedGroup = ref<any>(null);
+    const apiErrorMessage = ref<string | null>(null);
+    const renderCount = ref<number>(0);
+    const errorsToRemove = ref<Kesalahan[]>([]); // Menyimpan daftar kesalahan untuk penghapusan
+
+    // Muat kesalahan setiap kali komponen di-mount untuk menjaga konsistensi saat scroll
     onMounted(() => {
-      const savedUser = localStorage.getItem("selectedUser");
-      if (savedUser) {
-        try {
-          selectedUser.value = JSON.parse(savedUser);
-        } catch (e) {
-          selectedUser.value = null;
-        }
-      }
-      const savedGroup = localStorage.getItem("selectedGroup");
-      if (savedGroup) {
-        try {
-          selectedGroup.value = JSON.parse(savedGroup);
-        } catch (e) {
-          selectedGroup.value = null;
-        }
-      }
-    });
+      renderCount.value++;
+      console.log(`ArabicText.tsx: Component rendered ${renderCount.value} times for verseKey: ${verseKey.value}`);
+      loadKesalahan(); // Selalu muat ulang untuk memastikan data konsisten
 
-    // Computed untuk mengambil label error yang tersedia berdasarkan setting user, grup, atau global
-    const availableErrorLabels = computed(() => {
-      let settingsKey = "";
-      if (selectedUser.value) {
-        // Gunakan kunci untuk user tanpa penambahan id
-        settingsKey = "qurani_setting_user";
-      } else if (selectedGroup.value) {
-        // Gunakan kunci untuk grup, tambahkan id grup jika tersedia
-        settingsKey = "qurani_setting_grup_" + selectedGroup.value.id;
+      const groupId = localStorage.getItem("group_id");
+      const userId = localStorage.getItem("user_id");
+
+      console.log("ArabicText.tsx: group_id from localStorage:", groupId);
+      console.log("ArabicText.tsx: user_id from localStorage:", userId);
+
+      if (groupId && groupId !== "null" && !isNaN(Number(groupId))) {
+        selectedGroup.value = { id: Number(groupId) };
+        fetchSettings(Number(groupId), null);
+      } else if (userId && userId !== "null" && !isNaN(Number(userId))) {
+        selectedUser.value = { id: Number(userId) };
+        fetchSettings(null, Number(userId));
       } else {
-        settingsKey = "qurani_setting_global";
+        apiErrorMessage.value = "Tidak ada grup atau pengguna yang dipilih.";
       }
-      const stored = localStorage.getItem(settingsKey);
-      if (!stored) return [];
-      try {
-        const parsed = JSON.parse(stored);
-        const checked = parsed.checkedErrors || {};
-        // Kembalikan array label yang diset true
-        return Object.keys(checked).filter(label => checked[label] === true);
-      } catch (e) {
-        return [];
-      }
+
+      window.addEventListener("setoranDataReceived", handleSetoranDataReceived);
+      window.addEventListener("keydown", handleKeydown);
     });
-    
 
-    // Pisahkan label error untuk kata (tidak diawali "Ayat") dan untuk ayat (diawali "Ayat")
-    const availableWordErrorLabels = computed(() =>
-      availableErrorLabels.value.filter(label => !label.startsWith("Ayat"))
-    );
-    const availableVerseErrorLabels = computed(() =>
-      availableErrorLabels.value.filter(label => label.startsWith("Ayat"))
-    );
+    onBeforeUnmount(() => {
+      window.removeEventListener("setoranDataReceived", handleSetoranDataReceived);
+      window.removeEventListener("keydown", handleKeydown);
+      isHover.value = false;
+      Object.keys(tooltipInstance.value).forEach((key) => tooltipInstance.value[Number(key)]?.hide());
+      Object.keys(popoverInstance.value).forEach((key) => popoverInstance.value[Number(key)]?.hide());
+    });
 
-    // Fungsi untuk menentukan apakah kata yang berada pada posisi tertentu di-highlight
+    const saveErrorSettings = (settingsKey: string) => {
+      const data = {
+        checkedErrors: checkedErrors.value,
+        customLabels: customLabels.value,
+        errorColors: errorColors.value,
+        errorKeysOrder: errorKeysOrder.value,
+        errorTypes: errorTypes.value,
+      };
+      try {
+        localStorage.setItem(settingsKey, JSON.stringify(data));
+        console.log(`ArabicText.tsx: Settings saved to localStorage with key ${settingsKey}`);
+      } catch (e) {
+        console.error(`ArabicText.tsx: Failed to save to localStorage with key ${settingsKey}:`, e);
+      }
+    };
+
+    const loadErrorSettings = (settingsKey: string) => {
+      const stored = localStorage.getItem(settingsKey);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (!parsed.errorKeysOrder || !parsed.customLabels || !parsed.errorTypes) {
+            console.warn(`ArabicText.tsx: Incomplete localStorage data for ${settingsKey}, removing data`);
+            localStorage.removeItem(settingsKey);
+            return false;
+          }
+          errorColors.value = parsed.errorColors || {};
+          checkedErrors.value = parsed.checkedErrors || {};
+          customLabels.value = parsed.customLabels || {};
+          errorKeysOrder.value = parsed.errorKeysOrder || [];
+          errorTypes.value = parsed.errorTypes || {};
+          console.log(`ArabicText.tsx: Settings loaded from localStorage with key ${settingsKey}`);
+          return true;
+        } catch (e) {
+          console.error("ArabicText.tsx: Failed to parse settings from localStorage:", e);
+          localStorage.removeItem(settingsKey);
+          return false;
+        }
+      }
+      return false;
+    };
+
+    const processApiData = (apiData: any[], settingsKey: string) => {
+      console.log("ArabicText.tsx: Processing API data:", apiData);
+      const newCheckedErrors: Record<string, boolean> = {};
+      const newCustomLabels: Record<string, string> = {};
+      const newErrorColors: Record<string, string> = {};
+      const ayatLabels: { label: string; key: string }[] = [];
+      const kataLabels: { label: string; key: string }[] = [];
+      const newErrorTypes: Record<string, "ayat" | "kata"> = {};
+
+      apiData.forEach((item: any) => {
+        if (item.key && typeof item.key === "string" && (item.key.startsWith("sa-") || item.key.startsWith("sk-"))) {
+          const key = item.key;
+          const label = item.value && typeof item.value === "string" ? item.value : key;
+          newCheckedErrors[key] = item.status === 1;
+          newCustomLabels[key] = label;
+          newErrorColors[key] = item.color && typeof item.color === "string" ? item.color : "#CCCCCC";
+          newErrorTypes[key] = item.key.startsWith("sa-") ? "ayat" : "kata";
+
+          console.log(`ArabicText.tsx: Processed item - key: ${key}, label: ${label}, type: ${newErrorTypes[key]}`);
+
+          if (newErrorTypes[key] === "ayat") {
+            ayatLabels.push({ label, key });
+          } else {
+            kataLabels.push({ label, key });
+          }
+        } else {
+          console.warn(`ArabicText.tsx: Invalid item ignored:`, item);
+        }
+      });
+
+      const sortedAyatLabels = ayatLabels
+        .sort((a, b) => {
+          if (a.key === "sa-5") return 1;
+          if (b.key === "sa-5") return -1;
+          return a.key.localeCompare(b.key);
+        })
+        .map((item) => item.key);
+
+      const sortedKataLabels = kataLabels
+        .sort((a, b) => {
+          if (a.key === "sk-14") return 1;
+          if (b.key === "sk-14") return -1;
+          return a.key.localeCompare(b.key);
+        })
+        .map((item) => item.key);
+
+      errorKeysOrder.value = [...sortedAyatLabels, ...sortedKataLabels];
+      checkedErrors.value = newCheckedErrors;
+      customLabels.value = newCustomLabels;
+      errorColors.value = newErrorColors;
+      errorTypes.value = newErrorTypes;
+
+      console.log("ArabicText.tsx: Processed settings:", {
+        errorKeysOrder: errorKeysOrder.value,
+        checkedErrors: checkedErrors.value,
+        customLabels: customLabels.value,
+        errorColors: errorColors.value,
+        errorTypes: errorTypes.value,
+      });
+
+      saveErrorSettings(settingsKey);
+    };
+
+    const fetchSettings = async (groupId: number | null, userId: number | null) => {
+      isLoadingSettings.value = true;
+      const settingsKey = groupId && !isNaN(groupId) ? `qurani_setting_grup_${groupId}` : userId && !isNaN(userId) ? "qurani_setting_user" : "qurani_setting_global";
+
+      if (loadErrorSettings(settingsKey)) {
+        console.log(`ArabicText.tsx: Using data from localStorage for ${settingsKey}`);
+        apiErrorMessage.value = null;
+        isLoadingSettings.value = false;
+        return;
+      }
+
+      let apiUrl: string = "https://quranapi-production-b288.up.railway.app/api/v1/";
+      if (groupId && !isNaN(groupId)) {
+        apiUrl = `${apiUrl}group-qurani-settings/${groupId}`;
+        selectedGroup.value = { id: groupId };
+        selectedUser.value = null;
+        localStorage.setItem("selectedGroup", JSON.stringify({ id: groupId }));
+        localStorage.removeItem("selectedUser");
+      } else if (userId && !isNaN(userId)) {
+        apiUrl = `${apiUrl}user-qurani-settings/${userId}`;
+        selectedUser.value = { id: userId };
+        selectedGroup.value = null;
+        localStorage.setItem("selectedUser", JSON.stringify({ id: userId }));
+        localStorage.removeItem("selectedGroup");
+      } else {
+        console.warn("ArabicText.tsx: No valid groupId or userId.");
+        apiErrorMessage.value = "Tidak ada grup atau pengguna yang dipilih.";
+        isLoadingSettings.value = false;
+        return;
+      }
+
+      console.log(`ArabicText.tsx: Fetching settings from ${apiUrl}`);
+      try {
+        const response = await fetch(apiUrl);
+        console.log(`ArabicText.tsx: Response status: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch settings: ${response.status}`);
+        }
+        const apiData = await response.json();
+        console.log("ArabicText.tsx: API data received:", apiData);
+        processApiData(apiData, settingsKey);
+        apiErrorMessage.value = null;
+      } catch (error) {
+        console.error("ArabicText.tsx: Failed to fetch settings from API:", error);
+        apiErrorMessage.value = `Gagal mengambil pengaturan: ${error.message}`;
+      } finally {
+        isLoadingSettings.value = false;
+      }
+    };
+
+    const handleSetoranDataReceived = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const data = customEvent.detail;
+      console.log("ArabicText.tsx: setoranDataReceived:", data);
+      if (data.payloadType === "setoran" && data.group_id && !isNaN(Number(data.group_id))) {
+        if (selectedGroup.value?.id !== Number(data.group_id)) {
+          fetchSettings(Number(data.group_id), null);
+        }
+      } else if (data.user_id && !isNaN(Number(data.user_id))) {
+        if (selectedUser.value?.id !== Number(data.user_id)) {
+          fetchSettings(null, Number(data.user_id));
+        }
+      }
+    };
+
+    const availableErrorLabels = computed(() => {
+      return errorKeysOrder.value.filter(
+        (key) => key in checkedErrors.value && checkedErrors.value[key] === true && key in customLabels.value && key in errorTypes.value
+      );
+    });
+
+    const availableWordErrorLabels = computed(() => {
+      return availableErrorLabels.value.filter((key) => errorTypes.value[key] === "kata");
+    });
+
+    const availableVerseErrorLabels = computed(() => {
+      return availableErrorLabels.value.filter((key) => errorTypes.value[key] === "ayat");
+    });
+
     function isHighlightWord(position: number) {
-      return (props.highlight === position);
+      return props.highlight === position;
     }
 
-    // Fungsi inisialisasi popover
     function onInitPopover(key: number) {
       return function (popover: BSPopover) {
         popoverInstance.value[key] = popover;
       };
     }
 
-    // Fungsi untuk menangani klik dan tahan (click hold) pada tombol
     function onClickHold(key: number) {
       return function () {
-        Object.keys(popoverInstance.value).forEach((keys) =>
-          Number(keys) !== key && popoverInstance.value[Number(keys)]?.hide()
-        );
+        Object.keys(popoverInstance.value).forEach((keys) => Number(keys) !== key && popoverInstance.value[Number(keys)]?.hide());
         popoverInstance.value[key]?.toggle();
         setTimeout(() => tooltipInstance.value[key]?.hide(), 100);
       };
     }
 
-    // Fungsi untuk menampilkan modal ketika kata ditekan
     function showWrongWordModal(word: Words, isVerseEnd = false) {
-      const isAlreadyMarked = markedErrors.value.some((err) =>
-        (isVerseEnd && err.verseNumber === props.verseNumber) ||
-        (!isVerseEnd && err.word?.id === word.id)
+      console.log("ArabicText.tsx: showWrongWordModal:", {
+        word,
+        isVerseEnd,
+        customLabels: customLabels.value,
+        availableWordErrorLabels: availableWordErrorLabels.value,
+        isLoadingSettings: isLoadingSettings.value,
+      });
+
+      if (isLoadingSettings.value) {
+        modalContent.value = "Memuat pengaturan, silakan tunggu...";
+        isModalVisible.value = true;
+        return;
+      }
+
+      if (!Object.keys(customLabels.value).length) {
+        modalContent.value = "Pengaturan label belum dimuat. Silakan coba lagi.";
+        apiErrorMessage.value = "Gagal memuat label kesalahan.";
+        isModalVisible.value = true;
+        return;
+      }
+
+      const currentVerseKey = `${props.chapterId}:${props.verseNumber}`;
+      const isAlreadyMarked = kesalahan.value.some(
+        (err) => (isVerseEnd && err.verseKey === currentVerseKey && err.kata === null) || (!isVerseEnd && err.wordKey === `${currentVerseKey}:${word.id}`)
       );
 
       if (isAlreadyMarked) {
-        // Jika sudah ditandai, tampilkan opsi "Hapus Tanda"
-        correctionTarget.value = isVerseEnd ? 'ayat' : 'kata';
-        modalContent.value = isVerseEnd
-          ? `Hapus tanda pada ayat ${props.verseNumber}`
-          : `Hapus tanda pada kata "${word.text_uthmani}"`;
+        correctionTarget.value = isVerseEnd ? "ayat" : "kata";
+        // Ambil daftar kesalahan untuk ditampilkan di modal
+        errorsToRemove.value = isVerseEnd
+          ? kesalahan.value.filter((err) => err.verseKey === currentVerseKey && err.kata === null)
+          : kesalahan.value.filter((err) => err.wordKey === `${currentVerseKey}:${word.id}`);
+        modalContent.value = isVerseEnd ? `Pilih kesalahan ayat untuk dihapus` : `Pilih kesalahan kata "${word.text_uthmani}" untuk dihapus`;
         isModalVisible.value = true;
       } else {
-        // Jika belum ditandai, tampilkan opsi untuk menambahkan tanda
-        correctionTarget.value = isVerseEnd ? 'ayat' : 'kata';
+        correctionTarget.value = isVerseEnd ? "ayat" : "kata";
         modalContent.value = isVerseEnd
-          ? `Surat ${chapter.value?.name_simple} Ayat ke ${props.verseNumber}`
-          : `Kata ${word.text_uthmani}`;
+          ? `Surat ${chapter.value?.name_simple} Ayat ke ${props.verseNumber} (Halaman ${props.words[0]?.page_number || 0})`
+          : `Kata ${word.text_uthmani} (Halaman ${word.page_number})`;
         isModalVisible.value = true;
       }
       selectedWord.value = word;
     }
 
-    // Fungsi untuk mendapatkan gaya (style) untuk sebuah kata
     function getWordStyle(word: Words) {
-      const error = markedErrors.value.find((err) =>
-        (err.isVerseError && err.verseNumber === props.verseNumber) ||
-        (!err.isVerseError && err.word?.id === word.id)
-      );
-      if (error && error.Kesalahan in errorColors && !error.isVerseError) {
-        return { backgroundColor: errorColors[error.Kesalahan] };
+      const currentVerseKey = `${props.chapterId}:${props.verseNumber}`;
+      const currentWordKey = `${currentVerseKey}:${word.id}`;
+      const error = kesalahan.value.find((err) => err.wordKey === currentWordKey);
+      if (error && error.salahKey in errorColors.value) {
+        return { backgroundColor: errorColors.value[error.salahKey] };
       }
       return {};
     }
 
-    // Fungsi untuk menangani event keydown, khususnya tombol Escape untuk menutup modal
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         closeModal();
       }
     }
 
-    // Fungsi untuk menandai kesalahan
-    function markError(word: Words | null, Kesalahan: string, isVerseError: boolean = false) {
+    function markError(word: Words | null, salahKey: string, isVerseError: boolean = false) {
+      console.log("ArabicText.tsx: Before adding kesalahan:", kesalahan.value);
+
       let pageNumber: number | undefined;
-      let sanitizedWord: Words | null = null;
-      
-      if (word) {
-        const tempWord = { ...word } as Partial<Words>;
-        delete tempWord.audio_url;
-        delete tempWord.position;
-        delete tempWord.location;
-        delete tempWord.line_number;
-        delete tempWord.translation;
-        delete tempWord.transliteration;
-        sanitizedWord = tempWord as Words;
+      let sanitizedWord: Kesalahan["kata"] = null;
+      const currentVerseKey = `${props.chapterId}:${props.verseNumber}`;
+
+      if (word && !isVerseError) {
+        sanitizedWord = {
+          char_type: word.char_type_name,
+          id: word.id,
+          text: word.text_uthmani,
+        };
         pageNumber = word.page_number;
-      } else if (isVerseError) {
+      } else {
         pageNumber = props.words.length > 0 ? props.words[0].page_number : 0;
       }
-    
-      if (sanitizedWord || isVerseError) {
-        markedErrors.value.push({
-          word: sanitizedWord,
-          Kesalahan,
-          verseNumber: props.verseNumber!,
-          chapterName: chapter.value?.name_simple || '',
-          isVerseError,
-          page: pageNumber,
-        });
-        saveMarkedErrors();
-        closeModal();
-      }
-    }
 
-    // Fungsi untuk menghapus tanda kesalahan
-    function removeMarkedError(word: Words | null, isVerseError: boolean = false) {
-      if (isVerseError) {
-        markedErrors.value = markedErrors.value.filter((err) =>
-          err.verseNumber !== props.verseNumber || !err.isVerseError
-        );
-      } else if (word) {
-        markedErrors.value = markedErrors.value.filter((err) =>
-          err.word?.id !== word.id
-        );
+      const isDuplicate = kesalahan.value.some(
+        (err) =>
+          err.salahKey === salahKey &&
+          err.verseKey === currentVerseKey &&
+          (isVerseError ? err.kata === null : err.kata?.id === sanitizedWord?.id)
+      );
+
+      if (isDuplicate) {
+        console.log("ArabicText.tsx: Duplicate kesalahan detected, skipping addition.");
+        closeModal();
+        return;
       }
-      saveMarkedErrors();
+
+      loadKesalahan();
+      const newKesalahan: Kesalahan = {
+        salahKey,
+        salah: customLabels.value[salahKey] || salahKey,
+        NamaSurat: chapter.value?.name_simple || "",
+        Page: pageNumber,
+        noAyat: props.verseNumber!,
+        verseKey: currentVerseKey,
+        wordKey: sanitizedWord ? `${currentVerseKey}:${sanitizedWord.id}` : undefined,
+        kata: sanitizedWord,
+      };
+
+      kesalahan.value = [...kesalahan.value, newKesalahan];
+      console.log("ArabicText.tsx: After adding kesalahan:", kesalahan.value);
+
+      saveKesalahan();
       closeModal();
     }
 
-    // Fungsi untuk menyimpan data kesalahan ke localStorage
-    function saveMarkedErrors() {
-      try {
-        localStorage.setItem('markedErrors', JSON.stringify(markedErrors.value));
-      } catch (error) {
-        // Tangani error jika terjadi kegagalan penyimpanan
+    function removeMarkedError(word: Words | null, isVerseError: boolean = false, salahKey: string) {
+      console.log("ArabicText.tsx: Before removing kesalahan:", kesalahan.value);
+      
+      const currentVerseKey = `${props.chapterId}:${props.verseNumber}`;
+      
+      if (isVerseError) {
+        kesalahan.value = kesalahan.value.filter(
+          (err) => !(err.verseKey === currentVerseKey && err.kata === null && err.salahKey === salahKey)
+        );
+      } else if (word) {
+        const currentWordKey = `${currentVerseKey}:${word.id}`;
+        kesalahan.value = kesalahan.value.filter(
+          (err) => !(err.wordKey === currentWordKey && err.salahKey === salahKey)
+        );
       }
+      
+      console.log("ArabicText.tsx: After removing kesalahan:", kesalahan.value);
+      saveKesalahan();
+      closeModal();
     }
 
-    // Fungsi untuk menutup modal
     function closeModal() {
       isModalVisible.value = false;
+      apiErrorMessage.value = null;
+      errorsToRemove.value = [];
     }
 
-    // Fungsi untuk menampilkan tooltip saat mouse over
     function onMouseOver(key: number) {
       isHover.value = true;
       if (!props.showTooltipWhenHighlight || !isHighlightWord(key)) {
@@ -328,7 +584,6 @@ export default defineComponent({
       }
     }
 
-    // Fungsi untuk menyembunyikan tooltip saat mouse leave
     function onMouseLeave(key: number) {
       isHover.value = false;
       if (!props.showTooltipWhenHighlight || !isHighlightWord(key)) {
@@ -336,100 +591,47 @@ export default defineComponent({
       }
     }
 
-    // Fungsi pembungkus untuk kata, mengaplikasikan Popover jika tombol tambahan diaktifkan
-    function wordWrapper(word: Words, children: VNode) {
+    function wordWrapper(word: Words, children: any) {
       if (!shouldUseButton.value) {
-        return <>{children}</>;
-      } else {
-        return (
-          <Popover
-            key={`popover-${word.id}`}
-            placement="top"
-            options={{ html: true, trigger: "manual", content: () => refs.value.popoverContent! }}
-            onInit={onInitPopover(word.position)}
-          >
-            {{
-              title: () => (
-                <div class="text-center">
-                  {t("quran-reader.word-number", { ayah: props.verseNumber })}
-                </div>
-              ),
-              default: () => children,
-            }}
-          </Popover>
-        );
+        return children;
       }
+      return (
+        <Popover
+          key={`popover-${word.id}`}
+          placement="top"
+          options={{ html: true, trigger: "manual", content: () => refs.value.popoverContent! }}
+          onInit={onInitPopover(word.position)}
+        >
+          {{
+            title: () => <div class="text-center">{t("quran-reader.word-number", { ayah: props.verseNumber })}</div>,
+            default: () => children,
+          }}
+        </Popover>
+      );
     }
 
-    // Fungsi untuk memilih kata berdasarkan posisinya
     function selectWord(position: number) {
       selectedWord.value = props.words.find((word) => word.position === position) || null;
     }
 
-    // Fungsi auto refresh: mengambil ulang data markedErrors dari localStorage
-    function autoRefresh() {
-      const savedErrors = localStorage.getItem('markedErrors');
-      if (savedErrors) {
-        markedErrors.value = JSON.parse(savedErrors);
-      }
-    }
-    let autoRefreshTimer: number;
-
-    onMounted(() => {
-      const savedErrors = localStorage.getItem('markedErrors');
-      if (savedErrors) {
-        markedErrors.value = JSON.parse(savedErrors);
-      }
-      window.addEventListener("keydown", handleKeydown);
-      autoRefreshTimer = window.setInterval(autoRefresh, 1000);
-    });
-    
-    onBeforeUnmount(() => {
-      window.removeEventListener("keydown", handleKeydown);
-      if (autoRefreshTimer) {
-        window.clearInterval(autoRefreshTimer);
-      }
-      isHover.value = false;
-      Object.keys(tooltipInstance.value).forEach((key) =>
-        tooltipInstance.value[Number(key)]?.hide()
-      );
-      Object.keys(popoverInstance.value).forEach((key) =>
-        popoverInstance.value[Number(key)]?.hide()
-      );
-    });
-    
-    watch(() => props.highlight, (value, oldValue) => {
-      if (!props.showTooltipWhenHighlight) return;
-      if (typeof value === "number") tooltipInstance.value[value]?.show();
-      if (typeof oldValue === "number") tooltipInstance.value[oldValue]?.hide();
-    });
-    
-    watch(() => props.showTooltipWhenHighlight, (value) => {
-      if (typeof props.highlight === "number") {
-        tooltipInstance.value[props.highlight]?.[value ? "show" : "hide"]();
-      }
-    });
-    
     function getVerseErrorStyle() {
-      const verseError = markedErrors.value.find((err) =>
-        err.isVerseError && err.verseNumber === props.verseNumber
-      );
-      if (verseError && verseError.Kesalahan in errorColors) {
+      const verseError = kesalahan.value.find((err) => err.kata === null && err.verseKey === verseKey.value);
+      if (verseError && verseError.salahKey in errorColors.value) {
         if (fontType.value === "Default") {
           return {
-            backgroundColor: errorColors[verseError.Kesalahan],
-            padding: '26px 1px 14px 1px',
+            backgroundColor: errorColors.value[verseError.salahKey],
+            padding: "26px 1px 14px 1px",
           };
         } else if (fontType.value === "Uthmanic") {
           return {
-            backgroundColor: errorColors[verseError.Kesalahan],
-            padding: '28px 1px 13px 1px',
+            backgroundColor: errorColors.value[verseError.salahKey],
+            padding: "28px 1px 13px 1px",
           };
         }
       }
       return {};
     }
-    
+
     return {
       t,
       tooltipInstance,
@@ -459,9 +661,10 @@ export default defineComponent({
       AlertDialog,
       closeModal,
       correctionTarget,
+      customLabels,
       selectedWord,
       selectWord,
-      markedErrors,
+      kesalahan,
       errorColors,
       getWordStyle,
       markError,
@@ -471,6 +674,9 @@ export default defineComponent({
       availableVerseErrorLabels,
       selectedUser,
       selectedGroup,
+      apiErrorMessage,
+      isLoadingSettings,
+      errorsToRemove,
     };
   },
   render() {
@@ -485,62 +691,74 @@ export default defineComponent({
               onClick={this.closeModal}
             >
               <div class="modal-dialog modal-dialog-centered" onClick={(e: MouseEvent) => e.stopPropagation()}>
-                <div class="modal-content">
+                <div class="modal-content mt-5" style={{ maxHeight: "90vh", overflowY: "auto" }}>
                   <div class="modal-header">
                     <h5 class="modal-title">{this.modalContent}</h5>
                     <button type="button" class="btn-close" onClick={this.closeModal}></button>
                   </div>
                   <div class="modal-body">
-                    {this.markedErrors.some((err) =>
-                      (this.correctionTarget === 'ayat' && err.verseNumber === this.verseNumber) ||
-                      (this.correctionTarget === 'kata' && err.word?.id === this.selectedWord?.id)
-                    ) ? (
-                      <button 
-                        class="w-100 mb-2 btn btn-danger" 
-                        onClick={() => this.removeMarkedError(this.selectedWord, this.correctionTarget === 'ayat')}
-                      >
-                        Hapus Tanda
-                      </button>
+                    {this.apiErrorMessage ? (
+                      <div class="alert alert-danger" role="alert">
+                        {this.apiErrorMessage}
+                      </div>
+                    ) : this.isLoadingSettings ? (
+                      <p>Memuat label kesalahan...</p>
+                    ) : this.errorsToRemove.length > 0 ? (
+                      this.errorsToRemove.map((err: Kesalahan) => (
+                        <button
+                          key={err.salahKey}
+                          class="w-100 mb-2 btn btn-danger"
+                          onClick={() => this.removeMarkedError(this.selectedWord, this.correctionTarget === "ayat", err.salahKey)}
+                        >
+                          Hapus {err.salah}
+                        </button>
+                      ))
+                    ) : this.correctionTarget === "kata" ? (
+                      <>
+                        {this.availableWordErrorLabels.length > 0 ? (
+                          this.availableWordErrorLabels.map((key: string) => (
+                            <button
+                              key={key}
+                              class="w-100 mb-2 btn"
+                              onClick={() => this.markError(this.selectedWord, key)}
+                              style={{
+                                backgroundColor: this.errorColors[key] || "#CCCCCC",
+                                borderWidth: "2px",
+                                fontWeight: "500",
+                                textAlign: "left",
+                                color: "#000000",
+                              }}
+                            >
+                              {key in this.customLabels ? this.customLabels[key] : key}
+                            </button>
+                          ))
+                        ) : (
+                          <p>Tidak ada label kesalahan kata yang tersedia.</p>
+                        )}
+                      </>
                     ) : (
-                      this.correctionTarget === 'kata' ? (
-                        <>
-                          {this.availableWordErrorLabels.map((label: string) => (
+                      <>
+                        {this.availableVerseErrorLabels.length > 0 ? (
+                          this.availableVerseErrorLabels.map((key: string) => (
                             <button
-                              key={label}
+                              key={key}
                               class="w-100 mb-2 btn"
-                              onClick={() => this.markError(this.selectedWord, label)}
+                              onClick={() => this.markError(null, key, true)}
                               style={{
-                                backgroundColor: this.errorColors[label] || "#CCCCCC",
+                                backgroundColor: this.errorColors[key] || "#CCCCCC",
                                 borderWidth: "2px",
                                 fontWeight: "500",
                                 textAlign: "left",
-                                color: "#000000"
+                                color: "#000000",
                               }}
                             >
-                              {label}
+                              {key in this.customLabels ? this.customLabels[key] : key}
                             </button>
-                          ))}
-                        </>
-                      ) : (
-                        <>
-                          {this.availableVerseErrorLabels.map((label: string) => (
-                            <button
-                              key={label}
-                              class="w-100 mb-2 btn"
-                              onClick={() => this.markError(null, label, true)}
-                              style={{
-                                backgroundColor: this.errorColors[label] || "#CCCCCC",
-                                borderWidth: "2px",
-                                fontWeight: "500",
-                                textAlign: "left",
-                                color: "#000000"
-                              }}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </>
-                      )
+                          ))
+                        ) : (
+                          <p>Tidak ada label kesalahan ayat yang tersedia.</p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -548,68 +766,63 @@ export default defineComponent({
             </div>
           )}
         </Teleport>
-        <span 
-          dir="rtl" 
+        <span
+          dir="rtl"
           class={[
             styles.arabic_text,
             {
               [styles.highlight]: this.highlight === true,
               [styles.hover]: this.isHover && this.enableHover,
-              [styles.verse_error]: this.markedErrors.some(err => err.isVerseError && err.verseNumber === this.verseNumber)
+              [styles.verse_error]: this.kesalahan.some((err) => err.kata === null && err.verseKey === this.verseKey),
             },
           ]}
-          style={this.getVerseErrorStyle()} 
-          onMouseover={() => this.isHover = true}
-          onMouseleave={() => this.isHover = false}
+          style={this.getVerseErrorStyle()}
+          onMouseover={() => (this.isHover = true)}
+          onMouseleave={() => (this.isHover = false)}
         >
-          {this.words.map((word: Words) => this.wordWrapper(word, (
-            <Tooltip
-              key={`tooltip-${word.id}`}
-              tag="div"
-              timeout={0} 
-              options={{
-                trigger: "manual",
-                html: true,
-                delay: { show: 500, hide: 2000 },
-              }}
-              class={[
-                styles.text_wrapper,
-                { [styles.highlight_word]: this.isHighlightWord(word.position), "ps-2": this.showTransliterationInline }
-              ]}
-              {...{
-                "data-word-position": word.position,
-                "data-word-location": word.location,
-                "data-word-type": word.char_type_name,
-                "onclick": () => {
-                  this.showWrongWordModal(word, word.char_type_name == "end");
-                  this.selectedWord = word;
-                }
-              }}
-            >
-              <div
-                class={[
-                  "fs-arabic-auto",
-                  "text-center",
-                  { "font-uthmanic": word.char_type_name == "end", "font-arabic-auto": word.char_type_name == "word" }
-                ]}
-                style={this.getWordStyle(word)}
+          {this.words.map((word: Words) =>
+            this.wordWrapper(word, (
+              <Tooltip
+                key={`tooltip-${word.id}`}
+                tag="div"
+                timeout={0}
+                options={{
+                  trigger: "manual",
+                  html: true,
+                  delay: { show: 500, hide: 2000 },
+                }}
+                class={[styles.text_wrapper, { [styles.highlight_word]: this.isHighlightWord(word.position), "ps-2": this.showTransliterationInline }]}
+                {...{
+                  "data-word-position": word.position,
+                  "data-word-location": word.location,
+                  "data-word-type": word.char_type_name,
+                  onclick: () => {
+                    this.showWrongWordModal(word, word.char_type_name === "end");
+                    this.selectedWord = word;
+                  },
+                }}
               >
-                {[word.text_uthmani]}
-              </div>
-              {this.showTransliterationInline && (
-                <div class="text-center mt-1 mb-1">
-                  <i>{word.char_type_name == "word" ? word.transliteration.text : word.translation.text}</i>
+                <div
+                  class={["fs-arabic-auto", "text-center", { "font-uthmanic": word.char_type_name === "end", "font-arabic-auto": word.char_type_name === "word" }]}
+                  style={this.getWordStyle(word)}
+                >
+                  {word.text_uthmani}
                 </div>
-              )}
-              {this.showTranslationInline && (word.char_type_name == "word" || !this.showTransliterationInline) && (
-                <div class="text-center mt-1 mb-1">
-                  <p>{word.translation.text}</p>
-                </div>
-              )}
-            </Tooltip>
-          )))}
+                {this.showTransliterationInline && (
+                  <div class="text-center mt-1 mb-1">
+                    <i>{word.char_type_name === "word" ? word.transliteration?.text : word.translation?.text}</i>
+                  </div>
+                )}
+                {this.showTranslationInline && (word.char_type_name === "word" || !this.showTransliterationInline) && (
+                  <div class="text-center mt-1 mb-1">
+                    <p>{word.translation?.text}</p>
+                  </div>
+                )}
+              </Tooltip>
+            ))
+          )}
         </span>
       </>
     );
-  }
+  },
 });

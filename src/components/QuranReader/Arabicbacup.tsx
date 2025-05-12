@@ -6,7 +6,6 @@ import { useChapters } from "@/hooks/chapters";
 import Tooltip from "../Tooltip/Tooltip";
 import ButtonBookmark from "./Button/Bookmark";
 import ButtonCopy from "./Button/Copy";
-import ButtonTafsir from "./Button/Tafsir";
 import ButtonPlay from "./Button/Play";
 import Popover from "../Popover/Popover";
 import styles from "./ArabicText.module.scss";
@@ -240,12 +239,6 @@ export default defineComponent({
                                 {this.buttons.includes("Copy") && (
                                     <ButtonCopy
                                         text={this.textUthmani}
-                                    />
-                                )}
-                                {this.buttons.includes("Tafsir") && (
-                                    <ButtonTafsir
-                                        chapterId={this.chapterId!}
-                                        verseNumber={this.verseNumber!}
                                     />
                                 )}
                                 {this.buttons.includes("Play") && (

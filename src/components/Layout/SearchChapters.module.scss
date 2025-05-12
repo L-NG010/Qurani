@@ -106,3 +106,47 @@ html[data-bs-theme=dark] {
         color: $gray-400;
     }
 }
+.search_result {
+    cursor: pointer; /* Terapkan cursor pointer pada seluruh area hasil pencarian */
+  }
+  
+  .result_type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    cursor: pointer; /* Pertahankan untuk konsistensi */
+  }
+  
+  .result_icon {
+    width: 16px;
+    height: 16px;
+    cursor: pointer; /* Eksplisit untuk ikon */
+  }
+  
+  .result_label {
+    text-transform: capitalize;
+    cursor: pointer; /* Eksplisit untuk teks label */
+  }
+  
+  /* Gaya untuk ID dan nama */
+  .search_result .ms-3 {
+    cursor: pointer; /* Pastikan area ID dan nama juga memiliki cursor pointer */
+  }
+  
+  .surah {
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+  }
+  
+  .page {
+    background-color: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-text-emphasis);
+  }
+  
+  .juz {
+    background-color: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text-emphasis);
+  }

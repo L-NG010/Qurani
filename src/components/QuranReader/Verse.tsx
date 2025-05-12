@@ -4,7 +4,6 @@ import { useChapters } from "@/hooks/chapters";
 import styles from "./Verse.module.scss";
 import Icon from "../Icon/Icon";
 import Copy from "./Button/Copy";
-import Tafsir from "./Button/Tafsir";
 import Play from "./Button/Play";
 import ArabicText from "./ArabicText";
 import Bookmark from "./Button/Bookmark";
@@ -57,7 +56,7 @@ export default defineComponent({
         },
         buttons: {
             type: Array as PropType<QuranReader["PROPS_BUTTON"]>,
-            default: () => ["Bookmark", "Copy", "Tafsir", "Play"]
+            default: () => ["Bookmark", "Copy", "Play"]
         }
     },
     setup(props) {
@@ -114,14 +113,7 @@ export default defineComponent({
                                 />
                             </div>
                         )}
-                        {this.buttons.includes("Tafsir") && (
-                            <div class="mt-0 mt-md-2 ms-2 ms-md-1 d-flex align-items-center">
-                                <Tafsir
-                                    chapterId={this.chapterId}
-                                    verseNumber={this.verseNumber}
-                                />
-                            </div>
-                        )}
+                        
                         {this.buttons.includes("Play") && (
                             <div class="mt-0 mt-md-2 ms-2 ms-md-1 d-flex align-items-center">
                                 <Play

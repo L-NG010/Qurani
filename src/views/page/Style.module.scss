@@ -1,0 +1,19 @@
+.text {
+    a {
+        pointer-events: none !important;
+    }
+}
+// Style.module.scss
+.container {
+    direction: rtl; // Untuk tampilan bahasa Arab
+    text-align: right;
+    
+    .chapter-group {
+      margin-bottom: 2rem;
+      
+      &:nth-child(even) {
+        direction: ltr; // Untuk terjemahan/tafsir
+        text-align: left;
+      }
+    }
+  }

@@ -2,7 +2,7 @@ import { config } from "../hooks/settings";
 import { useHttp } from "../hooks/http";
 import { AxiosResponse } from "axios";
 import { Locale } from "../hooks/settings";
-import { ChapterInfo, TafsirsData, Verses, Tafsirs } from "@/types";
+import { ChapterInfo,  Verses } from "@/types";
 
 interface MakeParamsReturn {
     fields: string,
@@ -63,6 +63,11 @@ export const getVerseByJuz = (id: number, locale: Locale = "id"): Promise<AxiosR
         .catch(reject)
 });
 
+export function getPageVerses(page: number, locale: string) {
+    return `pages/${page}?language=${locale}&words=false&translations=false&audio=false`;
+  }
+  
+
 export const getVerseByKey = (key: string, locale: Locale = "id"): Promise<Verses> => new Promise((resolve, reject) => {
     const params = makeParams({
         translations: translations[locale],
@@ -84,33 +89,33 @@ export const getChapterInfo = (id: number, locale: Locale = "id"): Promise<Chapt
         .catch(reject)
 });
 
-export const getTafsirByAyah = (id: string, slug: string, locale: Locale = "id"): Promise<TafsirsData> => new Promise((resolve, reject) => {
-    const params = {
-        locale: locale,
-        words: true,
-        mushaf: 7,
-        word_fields: [
-            "verse_key",
-            "verse_id",
-            "page_number",
-            "location",
-            "text_uthmani",
-            "code_v1",
-            "qpc_uthmani_hafs"
-        ].join(",")
-    }
-
-    http.get<{ tafsir: TafsirsData }>(`https://api.qurancdn.com/api/qdc/tafsirs/${slug}/by_ayah/${id}`, { params })
-        .then(response => resolve(response.data.tafsir))
-        .catch(reject);
-});
-
-export const getTafsir = (): Promise<Tafsirs[]> => new Promise((resolve, reject) => {
-    http.get<{ tafsirs: Tafsirs[] }>(makeUrl("resources/tafsirs"))
-        .then(response => resolve(response.data.tafsirs))
-        .catch(reject);
-});
-
+export interface Pagination {
+    per_page: number;
+    current_page: number;
+    next_page: number | null;
+    total_pages: number;
+    total_records: number;
+  }
+  
+  export const getVerseByPage = (
+    page: number,
+    locale: Locale = "id",
+    per_page: number = 286
+  ): Promise<{ verses: Verses[]; pagination: Pagination }> => {
+    const params = makeParams<MakeParams>({
+      translations: translations[locale],
+      locale,
+      per_page,
+      words: true,
+    });
+    return http
+      .get<{ verses: Verses[]; pagination: Pagination }>(
+        makeUrl(`/verses/by_page/${page}`),
+        { params }
+      )
+      .then((res) => res.data);
+  };
+  
 export default {
     makeParams,
     makeUrl,
@@ -118,6 +123,5 @@ export default {
     getVerseByJuz,
     getVerseByKey,
     getChapterInfo,
-    getTafsirByAyah,
-    getTafsir
+    getVerseByPage
 }

@@ -8,13 +8,11 @@ import Page from "./Page";
 import Skeleton from "./Skeleton";
 import Switcher from "@/components/QuranReader/Switcher";
 import Button from "@/components/Button/Button";
-import TafsirModal from "@/components/Tafsir/TafsirModal";
 import setPageTitle from "@/helpers/set-page-title";
 import Error from "@/components/Error/Error";
 
 export default defineComponent({
     setup() {
-        const { tafsirModal } = useQuranReader();
         const router = useRouter();
         const route = useRoute();
         const error = ref<unknown>(null);
@@ -43,7 +41,6 @@ export default defineComponent({
         return {
             verseNumber,
             chapterId,
-            tafsirModal,
             error,
             back
         }
@@ -51,11 +48,7 @@ export default defineComponent({
     render() {
         return (
             <>
-                <TafsirModal
-                    v-model:open={this.tafsirModal.isOpen}
-                    v-model:chapterId={this.tafsirModal.chapterId}
-                    v-model:verseNumber={this.tafsirModal.verseNumber}
-                />
+                \
 
                 <MainLayout>
                     <Transition
