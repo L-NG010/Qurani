@@ -118,19 +118,20 @@ export default defineComponent({
       }
 
       try {
-  const response = await fetch(apiUrl);
-  if (!response.ok) {
-    throw new Error(`Gagal mengambil pengaturan: ${response.status}`);
-  }
-  const apiData = await response.json();
-  processApiData(apiData, settingsKey);
-  apiErrorMessage.value = null;
-} catch (error) {
-  console.error("Error:", error instanceof Error ? error.message : String(error));
-  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
-} finally {
-  isLoadingSettings.value = false;
-}
+        const response = await fetch(apiUrl, { method });
+        if (!response.ok) {
+          throw new Error(`Gagal mereset pengaturan: ${response.status}`);
+        }
+        const apiData = await response.json();
+        processApiData(apiData, settingsKey);
+        apiErrorMessage.value = null;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Setting.tsx: Error in resetSettings:", errorMessage);
+        apiErrorMessage.value = errorMessage;
+      } finally {
+        isLoadingSettings.value = false;
+      }
     };
 
     const processApiData = (apiData: any[], settingsKey: string) => {
@@ -198,9 +199,12 @@ export default defineComponent({
         processApiData(apiData, settingsKey);
         apiErrorMessage.value = null;
       } catch (error: unknown) {
-  console.error("Error:", error instanceof Error ? error.message : String(error));
-  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
-}
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("Setting.tsx: Error in fetchSettings:", errorMessage);
+        apiErrorMessage.value = errorMessage;
+      } finally {
+        isLoadingSettings.value = false;
+      }
     };
 
     const updateSettingsOnLabelChange = (originalKey: string, newLabel: string) => {
