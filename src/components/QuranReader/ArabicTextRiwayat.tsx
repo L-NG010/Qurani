@@ -12,6 +12,9 @@ import styles from "./ArabicText.module.scss";
 import AlertDialog from "../AlertDialog/AlertDialog";
 import { useSettings } from "@/hooks/settings";
 
+interface TooltipOptions extends Partial<BSTooltip.Options> {
+  content?: string | (() => string);
+}
 interface Kesalahan {
   salahKey: string;
   salah: string;
@@ -82,6 +85,7 @@ export default defineComponent({
     const chapters = useChapters();
     const settings = useSettings();
     const { fontType } = settings;
+    
 
     const kesalahan = inject<Ref<Kesalahan[]>>("kesalahan", ref<Kesalahan[]>([]));
     const saveKesalahan = inject<() => void>("saveKesalahan", () => {
@@ -186,14 +190,14 @@ export default defineComponent({
       hasHasil.value = setoranData.value !== null && "hasil" in setoranData.value;
       if (hasHasil.value && setoranData.value!.kesalahan) {
         const parsedKesalahan = JSON.parse(setoranData.value!.kesalahan);
-        const ayatKesalahan = parsedKesalahan.ayatSalah.map((err: any) => ({
-          salahKey: err.salahKey,
-          salah: err.jenisKesalahan,
-          NamaSurat: err.surah,
-          Page: err.page || (props.words.length > 0 ? props.words[0].page_number : 1),
-          noAyat: err.ayat,
-          kata: null,
-        }));
+        const ayatKesalahan = parsedKesalahan.ayatSalah.map((err: { salahKey: string; jenisKesalahan: string; surah: string; page: number; ayat: number }) => ({
+  salahKey: err.salahKey,
+  salah: err.jenisKesalahan,
+  NamaSurat: err.surah,
+  Page: err.page || (props.words.length > 0 ? props.words[0].page_number : 1),
+  noAyat: err.ayat,
+  kata: null,
+}));
         const kataKesalahan: Kesalahan[] = [];
             Object.entries(parsedKesalahan.kataSalah).forEach(([salah, data]: [string, any]) => {
               const words = data.words;
@@ -414,10 +418,10 @@ export default defineComponent({
         const apiData = await response.json();
         processApiData(apiData, settingsKey);
         apiErrorMessage.value = null;
-      } catch (error) {
-        console.error("ArabicText.tsx: Failed to fetch settings from API:", error);
-        apiErrorMessage.value = `Gagal mengambil pengaturan: ${error.message}`;
-      } finally {
+      } catch (error: unknown) {
+  console.error("Error:", error instanceof Error ? error.message : String(error));
+  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
+} finally {
         isLoadingSettings.value = false;
       }
     };
@@ -702,6 +706,7 @@ export default defineComponent({
       isLoadingSettings,
       shouldDisplayErrors,
       decodeUnicode,
+      defaultColorMap,
     };
   },
   render() {
@@ -794,14 +799,14 @@ export default defineComponent({
         </Teleport>
         <Tooltip
           tag="span"
-          options={{
-            trigger: "hover",
-            html: true,
-            placement: "top",
-            delay: { show: 200, hide: 200 },
-            content: this.getVerseErrorTooltip(),
-            container: "body",
-          }}
+         options={({
+  trigger: "hover",
+  html: true,
+  placement: "top",
+  delay: { show: 200, hide: 200 },
+  content: this.getVerseErrorTooltip(),
+  container: "body",
+} as TooltipOptions)}
           onInit={this.onInitErrorTooltip(`verse-${this.verseKey}`)}
           dir="rtl"
           class={[

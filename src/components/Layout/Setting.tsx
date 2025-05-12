@@ -123,8 +123,9 @@ export default defineComponent({
         }
         localStorage.removeItem(settingsKey);
         await fetchSettings(selectedGroup.value?.id, selectedUser.value?.id);
-      } catch (error) {
-        resetErrorMessage.value = `Gagal mereset pengaturan: ${error.message}`;
+      } catch (error: unknown) {
+        console.error("Error:", error instanceof Error ? error.message : String(error));
+        apiErrorMessage.value = error instanceof Error ? error.message : String(error);
       }
     };
 
@@ -192,10 +193,10 @@ export default defineComponent({
         const apiData = await response.json();
         processApiData(apiData, settingsKey);
         apiErrorMessage.value = null;
-      } catch (error) {
-        console.error("Setting.tsx: Gagal mengambil pengaturan dari API:", error);
-        apiErrorMessage.value = `Gagal mengambil pengaturan: ${error.message}`;
-      }
+      } catch (error: unknown) {
+  console.error("Error:", error instanceof Error ? error.message : String(error));
+  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
+}
     };
 
     const updateSettingsOnLabelChange = (originalKey: string, newLabel: string) => {

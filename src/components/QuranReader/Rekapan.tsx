@@ -1,7 +1,5 @@
 import router from "@/routes";
 import { defineComponent, ref, onMounted, reactive, watch, computed, watchEffect } from "vue";
-import { useChapters, Chapters } from "@/hooks/chapters";
-import { useJuzs, Juz } from "@/hooks/juzs";
 import vSelect from "vue-select";
 import "vue-select/dist/vue-select.css";
 import toast from "@/lib/toast";
@@ -12,6 +10,23 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { useEventListener } from "@vueuse/core";
+
+// Pindahkan Chapters ke file types/index.ts di masa depan
+export interface Chapters {
+  id: number;
+  bismillah_pre: boolean;
+  name_arabic: string;
+  name_complex: string;
+  name_simple: string;
+  pages: number[];
+  revelation_order: number;
+  revelation_place: string;
+  verses_count: number;
+  translated_name: { language_name: string; name: string };
+}
+
+import { useChapters } from "@/hooks/chapters";
+import { useJuzs, Juz } from "@/hooks/juzs";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -280,7 +295,7 @@ export default defineComponent({
           const parsed = JSON.parse(savedErrors);
           const newErrors: MarkedError[] = [];
           if (parsed.ayatSalah && parsed.kataSalah) {
-            const ayatErrors = parsed.ayatSalah.map((err: any) => ({
+            const ayatErrors = parsed.ayatSalah.map((err: { salahKey: string; jenisKesalahan: string; surah: string; page?: number; ayat: number }) => ({
               salahKey: err.salahKey,
               salah: err.jenisKesalahan,
               NamaSurat: err.surah,
@@ -312,7 +327,7 @@ export default defineComponent({
             newErrors.push(...ayatErrors, ...kataErrors);
           } else {
             newErrors.push(
-              ...parsed.map((err: any) => ({
+              ...parsed.map((err: { salah: string; salahKey: string; NamaSurat: string; Page?: number; noAyat: number; kata?: any }) => ({
                 salah: err.salah,
                 salahKey: err.salahKey,
                 NamaSurat: err.NamaSurat,
@@ -637,7 +652,9 @@ export default defineComponent({
           localStorage.removeItem("kesalahan");
 
           setTimeout(() => {
-            window.top.location.href = `${apiUrl}/qurani`;
+            if (window.top) {
+              window.top.location.href = `${apiUrl}/qurani`;
+            }
           }, 3000);
 
           setTimeout(() => {
@@ -663,7 +680,9 @@ export default defineComponent({
     }
 
     function goBack() {
-      window.top.location.href = `${apiUrl}/qurani`;
+      if (window.top) {
+        window.top.location.href = `${apiUrl}/qurani`;
+      }
     }
 
     const surahOptions = computed(() => {

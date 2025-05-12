@@ -300,7 +300,9 @@ export default defineComponent({
     };
 
     function goBack() {
-      window.top.location.href = "http://localhost/qurani";
+      if (window.top) {
+        window.top.location.href = "http://localhost/qurani";
+      }
     }
 
     function getDetailUrl() {

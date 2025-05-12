@@ -384,10 +384,10 @@ export default defineComponent({
         console.log("ArabicText.tsx: API data received:", apiData);
         processApiData(apiData, settingsKey);
         apiErrorMessage.value = null;
-      } catch (error) {
-        console.error("ArabicText.tsx: Failed to fetch settings from API:", error);
-        apiErrorMessage.value = `Gagal mengambil pengaturan: ${error.message}`;
-      } finally {
+      } catch (error: unknown) {
+  console.error("Error:", error instanceof Error ? error.message : String(error));
+  apiErrorMessage.value = error instanceof Error ? error.message : String(error);
+} finally {
         isLoadingSettings.value = false;
       }
     };
